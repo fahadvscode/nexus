@@ -1,71 +1,70 @@
--- Create user_profiles table to extend auth.users
+-- Create tables for multi-tenant system
 CREATE TABLE IF NOT EXISTS public.user_profiles (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
   email TEXT NOT NULL,
   username TEXT UNIQUE,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'subaccount')) DEFAULT 'subaccount',
-  created_by UUID REFERENCES auth.users(id), -- Who created this user (admin)
+  role TEXT NOT NULL DEFAULT 'subaccount' CHECK (role IN ('admin', 'subaccount')),
+  created_by UUID REFERENCES auth.users(id),
   is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(user_id)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create organizations/subaccounts table
 CREATE TABLE IF NOT EXISTS public.organizations (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
-  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  created_by UUID NOT NULL REFERENCES auth.users(id), -- Admin who created it
+  owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  created_by UUID REFERENCES auth.users(id),
   is_active BOOLEAN DEFAULT true,
-  settings JSONB DEFAULT '{}',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Update clients table to include organization_id for data isolation
-ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE;
+-- Add organization_id column to existing tables
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
+ALTER TABLE public.call_logs ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
 
--- Update call_logs table to include organization_id for data isolation
-ALTER TABLE public.call_logs ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE;
-
--- Enable RLS on new tables
+-- Enable RLS
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for user_profiles
+-- Simple RLS policies for user_profiles (avoid recursion)
 CREATE POLICY "Users can view their own profile" 
 ON public.user_profiles FOR SELECT
 USING (auth.uid() = user_id);
 
+CREATE POLICY "Users can update their own profile" 
+ON public.user_profiles FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- Special policy for admin operations - use a function to check admin status
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_profiles 
+    WHERE user_id = auth.uid() AND role = 'admin' AND is_active = true
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN false;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Admin policies using the function
 CREATE POLICY "Admins can view all profiles" 
 ON public.user_profiles FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+USING (public.is_admin_user());
 
-CREATE POLICY "Admins can create profiles" 
+CREATE POLICY "Admins can insert profiles" 
 ON public.user_profiles FOR INSERT
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+WITH CHECK (public.is_admin_user());
 
-CREATE POLICY "Admins can update profiles" 
+CREATE POLICY "Admins can update all profiles" 
 ON public.user_profiles FOR UPDATE
-USING (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+USING (public.is_admin_user());
 
 -- RLS Policies for organizations
 CREATE POLICY "Users can view their own organization" 
@@ -74,30 +73,15 @@ USING (auth.uid() = owner_id);
 
 CREATE POLICY "Admins can view all organizations" 
 ON public.organizations FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+USING (public.is_admin_user());
 
 CREATE POLICY "Admins can create organizations" 
 ON public.organizations FOR INSERT
-WITH CHECK (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+WITH CHECK (public.is_admin_user());
 
 CREATE POLICY "Admins can update organizations" 
 ON public.organizations FOR UPDATE
-USING (
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
-);
+USING (public.is_admin_user());
 
 -- Update RLS policies for clients table to include organization-based isolation
 DROP POLICY IF EXISTS "Allow users to see their own clients" ON public.clients;
@@ -111,11 +95,7 @@ USING (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 CREATE POLICY "Users can insert clients in their organization" 
@@ -124,11 +104,7 @@ WITH CHECK (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 CREATE POLICY "Users can update clients in their organization" 
@@ -137,11 +113,7 @@ USING (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 CREATE POLICY "Users can delete clients in their organization" 
@@ -150,11 +122,7 @@ USING (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 -- Update RLS policies for call_logs table
@@ -168,11 +136,7 @@ USING (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 CREATE POLICY "Users can create call logs in their organization" 
@@ -181,11 +145,7 @@ WITH CHECK (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 CREATE POLICY "Users can update call logs in their organization" 
@@ -194,11 +154,7 @@ USING (
   organization_id IN (
     SELECT id FROM public.organizations WHERE owner_id = auth.uid()
   )
-  OR
-  EXISTS (
-    SELECT 1 FROM public.user_profiles 
-    WHERE user_id = auth.uid() AND role = 'admin'
-  )
+  OR public.is_admin_user()
 );
 
 -- Create indexes for better performance
