@@ -26,27 +26,10 @@ CREATE TABLE IF NOT EXISTS public.organizations (
 ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
 ALTER TABLE public.call_logs ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id);
 
--- Enable RLS
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
+-- Enable RLS only on organizations (not on user_profiles to avoid recursion)
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 
--- Simple RLS policies for user_profiles without recursion
--- Allow all authenticated users to read their own profile
-CREATE POLICY "Users can view their own profile" 
-ON public.user_profiles FOR SELECT
-USING (auth.uid() = user_id);
-
--- Allow users to update their own profile
-CREATE POLICY "Users can update their own profile" 
-ON public.user_profiles FOR UPDATE
-USING (auth.uid() = user_id);
-
--- Allow profile creation (for triggers and admin operations)
-CREATE POLICY "Allow profile creation" 
-ON public.user_profiles FOR INSERT
-WITH CHECK (true);
-
--- RLS Policies for organizations
+-- Simple RLS policies for organizations only
 CREATE POLICY "Users can view their own organization" 
 ON public.organizations FOR SELECT
 USING (auth.uid() = owner_id);
@@ -59,7 +42,7 @@ CREATE POLICY "Users can update their own organization"
 ON public.organizations FOR UPDATE
 USING (auth.uid() = owner_id);
 
--- Update RLS policies for clients table to include organization-based isolation
+-- RLS policies for clients table
 DROP POLICY IF EXISTS "Allow users to see their own clients" ON public.clients;
 DROP POLICY IF EXISTS "Allow users to insert their own clients" ON public.clients;
 DROP POLICY IF EXISTS "Allow users to update their own clients" ON public.clients;
@@ -97,7 +80,7 @@ USING (
   )
 );
 
--- Update RLS policies for call_logs table
+-- RLS policies for call_logs table
 DROP POLICY IF EXISTS "Users can view all call logs" ON public.call_logs;
 DROP POLICY IF EXISTS "Users can create call logs" ON public.call_logs;
 DROP POLICY IF EXISTS "Users can update call logs" ON public.call_logs;
@@ -161,7 +144,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Create admin functions that bypass RLS
+-- Create admin functions that work without RLS conflicts
 CREATE OR REPLACE FUNCTION public.get_all_organizations_admin()
 RETURNS TABLE (
   id UUID,
@@ -173,13 +156,20 @@ RETURNS TABLE (
   created_at TIMESTAMP WITH TIME ZONE,
   updated_at TIMESTAMP WITH TIME ZONE
 ) AS $$
+DECLARE
+  user_role TEXT;
 BEGIN
+  -- Get user role directly from user_profiles (no RLS on this table)
+  SELECT role INTO user_role
+  FROM public.user_profiles 
+  WHERE user_id = auth.uid() AND is_active = true;
+  
   -- Check if user is admin
-  IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid() AND role = 'admin' AND is_active = true) THEN
+  IF user_role != 'admin' THEN
     RAISE EXCEPTION 'Access denied: Admin role required';
   END IF;
   
-  -- Return all organizations (bypassing RLS)
+  -- Return all organizations
   RETURN QUERY
   SELECT o.id, o.name, o.description, o.owner_id, o.created_by, o.is_active, o.created_at, o.updated_at
   FROM public.organizations o
@@ -199,13 +189,20 @@ RETURNS TABLE (
   created_at TIMESTAMP WITH TIME ZONE,
   updated_at TIMESTAMP WITH TIME ZONE
 ) AS $$
+DECLARE
+  user_role TEXT;
 BEGIN
+  -- Get user role directly from user_profiles (no RLS on this table)
+  SELECT role INTO user_role
+  FROM public.user_profiles 
+  WHERE user_id = auth.uid() AND is_active = true;
+  
   -- Check if user is admin
-  IF NOT EXISTS (SELECT 1 FROM public.user_profiles WHERE user_id = auth.uid() AND role = 'admin' AND is_active = true) THEN
+  IF user_role != 'admin' THEN
     RAISE EXCEPTION 'Access denied: Admin role required';
   END IF;
   
-  -- Return all profiles (bypassing RLS)
+  -- Return all profiles
   RETURN QUERY
   SELECT p.id, p.user_id, p.email, p.username, p.role, p.created_by, p.is_active, p.created_at, p.updated_at
   FROM public.user_profiles p
