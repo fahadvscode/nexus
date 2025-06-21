@@ -10,7 +10,7 @@ import { useUserRole } from "@/components/UserRoleProvider";
 import { AdminPasswordModal } from "@/components/AdminPasswordModal";
 import { TwilioSettings } from "@/components/settings/TwilioSettings";
 import { PhoneNumberManager } from "@/components/settings/PhoneNumberManager";
-import { UserManagement } from "@/components/settings/UserManagement";
+import UserManagement from "@/components/settings/UserManagement";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { DatabaseSettings } from "@/components/settings/DatabaseSettings";
@@ -18,7 +18,7 @@ import { EmailSettings } from "@/components/settings/EmailSettings";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 
 const Settings = () => {
-  const { userRole, switchToSubaccount } = useUserRole();
+  const { userRole, isAdmin } = useUserRole();
   const [showAdminModal, setShowAdminModal] = useState(false);
 
   return (
@@ -39,15 +39,10 @@ const Settings = () => {
               </div>
             </div>
             <div className="flex items-center space-x-3">
-              <Badge variant={userRole === 'admin' ? 'default' : 'secondary'}>
-                {userRole === 'admin' ? 'Admin' : 'Subaccount'}
+              <Badge variant={isAdmin() ? 'default' : 'secondary'}>
+                {isAdmin() ? 'Admin' : 'Subaccount'}
               </Badge>
-              {userRole === 'admin' ? (
-                <Button variant="outline" size="sm" onClick={switchToSubaccount}>
-                  <User className="h-4 w-4 mr-2" />
-                  Switch to Subaccount
-                </Button>
-              ) : (
+              {!isAdmin() && (
                 <Button variant="outline" size="sm" onClick={() => setShowAdminModal(true)}>
                   <Lock className="h-4 w-4 mr-2" />
                   Admin Access
