@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from '@supabase/supabase-js';
 import { CallLog, CallStats } from '@/types/call';
 
@@ -12,12 +11,51 @@ export class SupabaseCallStore {
     this.supabase = supabaseClient;
   }
 
+  // Get current user's organization ID
+  private async getCurrentOrganizationId(): Promise<string | null> {
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) return null;
+
+    // First check if user is admin - admins can see all data
+    const { data: profile } = await this.supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profile?.role === 'admin') {
+      return 'admin'; // Special case for admin access
+    }
+
+    // For subaccount users, get their organization ID
+    const { data: organization } = await this.supabase
+      .from('organizations')
+      .select('id')
+      .eq('owner_id', user.id)
+      .single();
+
+    return organization?.id || null;
+  }
+
   async getAllCalls(): Promise<CallLog[]> {
     try {
-      const { data, error } = await this.supabase
+      const organizationId = await this.getCurrentOrganizationId();
+      
+      let query = this.supabase
         .from('call_logs')
         .select('*')
         .order('start_time', { ascending: false });
+
+      // If not admin, filter by organization
+      if (organizationId !== 'admin') {
+        if (!organizationId) {
+          console.log('No organization found for user, cannot fetch calls.');
+          return [];
+        }
+        query = query.eq('organization_id', organizationId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error loading calls:', error);
@@ -47,11 +85,24 @@ export class SupabaseCallStore {
 
   async getCallsByClient(clientId: string): Promise<CallLog[]> {
     try {
-      const { data, error } = await this.supabase
+      const organizationId = await this.getCurrentOrganizationId();
+      
+      let query = this.supabase
         .from('call_logs')
         .select('*')
         .eq('client_id', clientId)
         .order('start_time', { ascending: false });
+
+      // If not admin, filter by organization
+      if (organizationId !== 'admin') {
+        if (!organizationId) {
+          console.log('No organization found for user, cannot fetch calls.');
+          return [];
+        }
+        query = query.eq('organization_id', organizationId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error loading client calls:', error);
