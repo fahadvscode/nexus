@@ -1,0 +1,25 @@
+
+project_id = "ggthpghndjqojeupprlc"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[functions.get-twilio-token]
+verify_jwt = false
+
+[functions.handle-voice]
+verify_jwt = false
+
+[functions.make-call]
+verify_jwt = true
+
+[functions.twilio-webhook]
+verify_jwt = false
+
+# CORS configuration for local development
+
+# Environment variables are defined in .env file and used by edge functions

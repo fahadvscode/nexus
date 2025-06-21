@@ -1,0 +1,548 @@
+import { create } from 'zustand';
+import { Device, Call } from '@twilio/voice-sdk';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
+
+export interface CallOptions {
+  phoneNumber: string;
+  clientName?: string;
+  clientId?: string;
+}
+
+interface TwilioStore {
+  device: Device | null;
+  isReady: boolean;
+  isConnecting: boolean;
+  activeCall: Call | null;
+  error: string | null;
+  callDuration: number;
+  isMuted: boolean;
+  isInitializing: boolean;
+  audioUnlocked: boolean;
+  
+  // Computed properties
+  currentCall: Call | null;
+  callStatus: 'idle' | 'calling' | 'connected';
+  isCallInProgress: boolean;
+  
+  // Actions
+  fetchTwilioToken: () => Promise<string>;
+  unlockAudio: () => void;
+  initializeDevice: () => Promise<void>;
+  makeCall: (options: CallOptions) => Promise<void>;
+  hangupCall: () => void;
+  endCall: () => void;
+  muteCall: () => void;
+  unmuteCall: () => void;
+  acceptCall: () => void;
+  rejectCall: () => void;
+  destroyDevice: () => void;
+  setupCallEventHandlers: (call: Call) => void;
+  handleIncomingCall: (call: Call) => void;
+  simulateDemoCall: (cleanNumber: string, clientName?: string, originalNumber?: string) => Promise<void>;
+}
+
+export const useTwilioStore = create<TwilioStore>((set, get) => ({
+  // Initial state
+  device: null,
+  isReady: false,
+  isConnecting: false,
+  activeCall: null,
+  error: null,
+  callDuration: 0,
+  isMuted: false,
+  isInitializing: false,
+  audioUnlocked: false,
+  
+  // Computed properties
+  get currentCall() { return get().activeCall; },
+  get callStatus() { 
+    const { activeCall, isConnecting } = get();
+    return activeCall ? 'connected' : isConnecting ? 'calling' : 'idle';
+  },
+  get isCallInProgress() { 
+    const { activeCall, isConnecting } = get();
+    return !!activeCall || isConnecting;
+  },
+
+  // Actions
+  fetchTwilioToken: async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session found');
+      }
+
+      console.log('🔄 Fetching Twilio token...');
+      
+      const { data, error } = await supabase.functions.invoke('get-twilio-token', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      
+      if (error) {
+        console.error('Token fetch error:', error);
+        throw new Error(`Failed to get token: ${error.message}`);
+      }
+      
+      if (!data?.token) {
+        throw new Error('No token returned from server');
+      }
+      
+      console.log('✅ Twilio token received');
+      return data.token;
+    } catch (err: any) {
+      console.error('❌ Error fetching Twilio token:', err);
+      throw err;
+    }
+  },
+
+  unlockAudio: () => {
+    const { audioUnlocked } = get();
+    if (!audioUnlocked) {
+      console.log('🔓 Unlocking audio context...');
+      set({ audioUnlocked: true });
+      console.log('🔓 Audio unlocked state set to true');
+      toast({
+        title: "Audio Unlocked",
+        description: "Ready to make calls.",
+      });
+    } else {
+      console.log('🔓 Audio already unlocked');
+    }
+  },
+
+  initializeDevice: async () => {
+    const { isInitializing, device, audioUnlocked } = get();
+    
+    // Prevent multiple simultaneous initializations
+    if (isInitializing || device) {
+      console.log('⚠️ Device already initializing or initialized, skipping...');
+      return;
+    }
+
+    if (!audioUnlocked) {
+      console.log('Audio not unlocked. Waiting for user interaction.');
+      set({ error: 'Click anywhere on the page to enable calling.' });
+      return;
+    }
+
+    try {
+      console.log('🔄 Initializing Twilio device...');
+      set({ isInitializing: true, error: null });
+      
+      const token = await get().fetchTwilioToken();
+      
+      // Create Twilio device with timeout
+      const newDevice = new Device(token, {
+        logLevel: 1,
+        edge: ['sydney', 'ashburn'],
+      });
+
+      // Set a timeout for device registration
+      const registrationTimeout = setTimeout(() => {
+        console.log('⏰ Device registration timeout, falling back to demo mode');
+        set({ 
+          error: 'Demo Mode: Device registration timeout - using simulated calls',
+          isReady: true,
+          isInitializing: false 
+        });
+        toast({
+          title: "Demo Mode Active",
+          description: "Device registration timeout. Using demo mode for reliable calling.",
+          variant: "default",
+        });
+      }, 10000);
+
+      // Set up device event handlers
+      newDevice.on('registered', () => {
+        clearTimeout(registrationTimeout);
+        console.log('✅ Twilio device registered successfully');
+        set({ 
+          device: newDevice,
+          isReady: true,
+          isInitializing: false 
+        });
+        toast({
+          title: "Twilio Ready",
+          description: "Twilio device is ready to make real calls",
+        });
+      });
+
+      newDevice.on('error', (error) => {
+        clearTimeout(registrationTimeout);
+        console.error('❌ Device error:', error);
+        set({ 
+          error: 'Demo Mode: Device error - using simulated calls',
+          isReady: true,
+          isInitializing: false 
+        });
+        toast({
+          title: "Demo Mode Active",
+          description: "Device error occurred. Using demo mode as fallback.",
+          variant: "default",
+        });
+      });
+
+      newDevice.on('incoming', (call) => {
+        console.log('📞 Incoming call:', call.parameters.From);
+        get().handleIncomingCall(call);
+      });
+
+      // Register the device
+      await newDevice.register();
+      
+    } catch (err: any) {
+      console.error('❌ Failed to initialize Twilio device:', err);
+      console.log('🔄 Falling back to demo mode...');
+      
+      set({ 
+        error: 'Demo Mode: Initialization failed - using simulated calls',
+        isReady: true,
+        isInitializing: false 
+      });
+      
+      toast({
+        title: "Demo Mode Active",
+        description: "Twilio initialization failed. Using demo mode for reliable calling.",
+        variant: "default",
+      });
+    }
+  },
+
+  handleIncomingCall: (call: Call) => {
+    set({ activeCall: call });
+    get().setupCallEventHandlers(call);
+    
+    toast({
+      title: "Incoming Call",
+      description: `Call from ${call.parameters.From}`,
+    });
+  },
+
+  setupCallEventHandlers: (call: Call) => {
+    call.on('accept', () => {
+      console.log('✅ Call accepted');
+      set({ isConnecting: false });
+      toast({
+        title: "Call Connected",
+        description: "Call is now active",
+      });
+    });
+
+    call.on('disconnect', () => {
+      console.log('📞 Call disconnected');
+      set({ 
+        activeCall: null,
+        isConnecting: false,
+        callDuration: 0,
+        isMuted: false 
+      });
+      toast({
+        title: "Call Ended",
+        description: "Call has been disconnected",
+      });
+    });
+
+    call.on('cancel', () => {
+      console.log('📞 Call cancelled');
+      set({ 
+        activeCall: null,
+        isConnecting: false,
+        callDuration: 0 
+      });
+      toast({
+        title: "Call Cancelled",
+        description: "Call was cancelled",
+      });
+    });
+
+    call.on('reject', () => {
+      console.log('📞 Call rejected');
+      set({ 
+        activeCall: null,
+        isConnecting: false,
+        callDuration: 0 
+      });
+      toast({
+        title: "Call Rejected",
+        description: "Call was rejected",
+      });
+    });
+
+    call.on('error', (error) => {
+      console.error('❌ Call error:', error);
+      
+      // Check if this is a webhook connection error (31005)
+      if (error.code === 31005 || error.message?.includes('31005')) {
+        console.log('🔄 Webhook connection failed, switching to demo mode for future calls');
+        set({ 
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          error: 'Demo Mode: Webhook connection failed - using simulated calls' 
+        });
+        
+        toast({
+          title: "Switched to Demo Mode",
+          description: "Webhook connection failed. Using demo mode for reliable calling.",
+          variant: "default",
+        });
+        
+        // Start a demo call immediately for this failed call
+        const phoneNumber = error.parameters?.To || '+1234567890';
+        const clientName = error.parameters?.ClientName || 'Unknown Client';
+        setTimeout(() => {
+          get().simulateDemoCall(phoneNumber, clientName, phoneNumber);
+        }, 1000);
+        
+      } else {
+        // Handle other call errors normally
+        set({ 
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          error: error.message || 'Call error occurred' 
+        });
+        toast({
+          title: "Call Error",
+          description: error.message || 'An error occurred during the call',
+          variant: "destructive",
+        });
+      }
+    });
+
+    call.on('mute', (isMuted) => {
+      set({ isMuted });
+      console.log(`🔇 Call ${isMuted ? 'muted' : 'unmuted'}`);
+    });
+  },
+
+  makeCall: async ({ phoneNumber, clientName, clientId }: CallOptions) => {
+    const { isReady, error, activeCall, device } = get();
+    
+    console.log('🚀 makeCall called with:', { phoneNumber, clientName, clientId, isReady, error });
+    
+    if (!isReady) {
+      const errorMsg = 'Calling device not ready. Please wait for initialization.';
+      console.log('❌ Device not ready:', errorMsg);
+      set({ error: errorMsg });
+      toast({
+        title: "Device Not Ready",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!phoneNumber) {
+      const errorMsg = 'Phone number is required';
+      set({ error: errorMsg });
+      toast({
+        title: "Error",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (activeCall) {
+      const errorMsg = 'Another call is already in progress';
+      set({ error: errorMsg });
+      toast({
+        title: "Call In Progress",
+        description: errorMsg,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      set({ 
+        error: null,
+        isConnecting: true,
+        callDuration: 0 
+      });
+      
+      console.log(`📞 Making call to ${phoneNumber} for client: ${clientName || 'Unknown'}`);
+      
+      // Clean phone number
+      let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
+      if (!cleanNumber.startsWith('+')) {
+        cleanNumber = '+1' + cleanNumber;
+      }
+
+      // Check if we have a real Twilio device or are in demo mode
+      if (device && !error?.includes('Demo Mode')) {
+        // Real Twilio call
+        try {
+          console.log('🔄 Attempting real Twilio call...');
+          
+          const call = await device.connect({
+            params: {
+              To: cleanNumber,
+              ClientName: clientName || 'Unknown Client',
+              ClientId: clientId || 'unknown'
+            }
+          });
+
+          set({ activeCall: call });
+          get().setupCallEventHandlers(call);
+
+          toast({
+            title: "Real Call Initiated",
+            description: `Making real Twilio call to ${clientName || phoneNumber}`,
+          });
+
+          console.log('✅ Real Twilio call initiated successfully:', call.parameters.CallSid);
+        } catch (twilioError: any) {
+          console.log('⚠️ Real Twilio call failed, falling back to demo mode:', twilioError.message);
+          toast({
+            title: "Fallback to Demo Mode",
+            description: "Real call failed, using demo mode for this call",
+            variant: "default",
+          });
+          await get().simulateDemoCall(cleanNumber, clientName, phoneNumber);
+        }
+      } else {
+        // Demo mode
+        console.log('🎭 Using demo mode for call simulation');
+        await get().simulateDemoCall(cleanNumber, clientName, phoneNumber);
+      }
+      
+    } catch (err: any) {
+      console.error('❌ Call failed:', err);
+      set({ 
+        error: err.message || 'Failed to make call',
+        isConnecting: false 
+      });
+      
+      toast({
+        title: "Call Failed",
+        description: err.message || 'Failed to initiate call',
+        variant: "destructive",
+      });
+    }
+  },
+
+  simulateDemoCall: async (cleanNumber: string, clientName?: string, originalNumber?: string) => {
+    console.log('📞 Demo mode: Simulating call...', { cleanNumber, clientName, originalNumber });
+    
+    const mockCall = {
+      parameters: {
+        CallSid: 'demo-call-' + Date.now(),
+        To: cleanNumber,
+        From: '+1234567890'
+      },
+      disconnect: () => {
+        console.log('📞 Demo call ended');
+        if ((mockCall as any).durationInterval) {
+          clearInterval((mockCall as any).durationInterval);
+        }
+        set({ 
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          isMuted: false 
+        });
+        toast({
+          title: "Demo Call Ended",
+          description: "Demo call has been disconnected",
+        });
+      },
+      mute: (muted: boolean) => {
+        set({ isMuted: muted });
+        console.log(`🔇 Demo call ${muted ? 'muted' : 'unmuted'}`);
+      },
+      on: () => {},
+    } as any;
+
+    toast({
+      title: "Demo Call Initiated",
+      description: `Demo call to ${clientName || originalNumber}...`,
+    });
+
+    setTimeout(() => {
+      set({ 
+        isConnecting: false,
+        activeCall: mockCall 
+      });
+      
+      const startTime = Date.now();
+      const durationInterval = setInterval(() => {
+        const currentTime = Date.now();
+        const duration = Math.floor((currentTime - startTime) / 1000);
+        set({ callDuration: duration });
+      }, 1000);
+      
+      (mockCall as any).durationInterval = durationInterval;
+      
+      toast({
+        title: "Demo Call Connected",
+        description: `Demo call connected to ${clientName || originalNumber}`,
+      });
+    }, 2000);
+  },
+
+  hangupCall: () => {
+    const { activeCall } = get();
+    if (activeCall) {
+      console.log('📞 Ending call...');
+      activeCall.disconnect();
+    }
+  },
+
+  endCall: () => get().hangupCall(),
+
+  muteCall: () => {
+    const { activeCall, isMuted } = get();
+    if (activeCall && !isMuted) {
+      activeCall.mute(true);
+    }
+  },
+
+  unmuteCall: () => {
+    const { activeCall, isMuted } = get();
+    if (activeCall && isMuted) {
+      activeCall.mute(false);
+    }
+  },
+
+  acceptCall: () => {
+    const { activeCall } = get();
+    if (activeCall) {
+      activeCall.accept();
+    }
+  },
+
+  rejectCall: () => {
+    const { activeCall } = get();
+    if (activeCall) {
+      activeCall.reject();
+    }
+  },
+
+  destroyDevice: () => {
+    const { device } = get();
+    if (device) {
+      console.log('🔧 Destroying Twilio device...');
+      try {
+        device.destroy();
+        set({ 
+          device: null,
+          isReady: false,
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          isMuted: false,
+          error: null,
+          isInitializing: false 
+        });
+      } catch (err) {
+        console.error('Error destroying device:', err);
+      }
+    }
+  },
+}));
