@@ -74,10 +74,7 @@ export const useUserManagement = () => {
     if (!userProfile || userProfile.role !== 'admin') return;
 
     try {
-      const { data: organizations, error } = await supabase
-        .from('organizations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: organizations, error } = await supabase.rpc('get_all_organizations_admin');
 
       if (error) {
         console.error('Error fetching organizations:', error);
@@ -95,10 +92,7 @@ export const useUserManagement = () => {
     if (!userProfile || userProfile.role !== 'admin') return;
 
     try {
-      const { data: profiles, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: profiles, error } = await supabase.rpc('get_all_profiles_admin');
 
       if (error) {
         console.error('Error fetching profiles:', error);

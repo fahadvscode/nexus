@@ -276,6 +276,33 @@ export interface Database {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_all_organizations_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          description: string | null
+          owner_id: string
+          created_by: string | null
+          is_active: boolean | null
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      get_all_profiles_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          user_id: string
+          email: string
+          username: string | null
+          role: string
+          created_by: string | null
+          is_active: boolean | null
+          created_at: string
+          updated_at: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
