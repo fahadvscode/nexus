@@ -1,10 +1,17 @@
 import { Route, Routes } from "react-router-dom";
-import DeploymentStatusPage from "./pages/DeploymentStatusPage";
+import Index from "./pages/Index";
+import Calendar from "./pages/Calendar";
+import CallHistory from "./pages/CallHistory";
+import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
 
 const AppRoutes = () => (
   <Routes>
-    {/* Temporarily disabling all other routes to force a deployment check. */}
-    <Route path="*" element={<DeploymentStatusPage />} />
+    <Route path="/" element={<Index />} />
+    <Route path="/calendar" element={<Calendar />} />
+    <Route path="/call-history" element={<CallHistory />} />
+    <Route path="/settings" element={<Settings />} />
+    <Route path="*" element={<NotFound />} />
   </Routes>
 );
 
