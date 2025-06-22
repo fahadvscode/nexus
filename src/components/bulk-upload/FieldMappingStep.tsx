@@ -42,6 +42,13 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
   onOrganizationChange,
 }) => {
   const { allOrganizations, allProfiles, isAdmin } = useUserManagement();
+  
+  // Debug logging to verify deployment
+  console.log('🔧 FieldMappingStep loaded - Organization feature active');
+  console.log('👑 Is admin user?', isAdmin());
+  console.log('🏢 Available organizations:', allOrganizations?.length || 0);
+  console.log('📋 Organization change handler available?', !!onOrganizationChange);
+
   const handleFieldChange = (crmField: string, csvHeader: string) => {
     const newMapping = { ...fieldMapping };
     if (csvHeader === 'none') {
