@@ -142,6 +142,14 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
         <p className="text-gray-600 mt-1">
           Match your CSV columns to the CRM fields below. Auto-mapping has been applied, but you can manually adjust any field mappings.
         </p>
+        
+        {/* DEPLOYMENT TEST - This should be visible if deployment worked */}
+        <div className="bg-yellow-100 border border-yellow-300 rounded p-2 my-2">
+          <p className="text-yellow-800 text-sm">
+            🚀 Deployment Test: Organization feature loaded - Version fe68482
+          </p>
+        </div>
+        
         <div className="flex justify-center mt-4">
           <Button 
             variant="outline" 
