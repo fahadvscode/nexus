@@ -146,7 +146,12 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
         {/* DEPLOYMENT TEST - This should be visible if deployment worked */}
         <div className="bg-yellow-100 border border-yellow-300 rounded p-2 my-2">
           <p className="text-yellow-800 text-sm">
-            🚀 Deployment Test: Organization feature loaded - Version fe68482
+            🚀 Deployment Test: Enhanced admin debugging active - Version 349d949
+          </p>
+          <p className="text-xs text-yellow-700 mt-1">
+            Admin status: {isAdmin() ? '✅ ADMIN USER' : '❌ Not admin'} | 
+            Organizations: {allOrganizations?.length || 0} | 
+            Handler: {!!onOrganizationChange ? '✅ Available' : '❌ Missing'}
           </p>
         </div>
         

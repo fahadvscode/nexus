@@ -169,7 +169,7 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
               </p>
               {/* Deployment verification */}
               <p className="text-xs text-blue-600 mt-1">
-                🔄 Version: 286c980 - Organization feature enabled
+                🔄 Version: 349d949 - Enhanced admin debugging active
               </p>
             </div>
           </div>
