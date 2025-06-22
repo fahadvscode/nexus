@@ -222,6 +222,65 @@ class ClientStore {
     }
     return data;
   }
+
+  // Admin-specific method for bulk client assignment
+  async bulkAssignClients(clientIds: string[], organizationId: string): Promise<boolean> {
+    const currentOrgId = await this.getCurrentOrganizationId();
+    
+    // Only admins can use this method
+    if (currentOrgId !== 'admin') {
+      console.error('Only admin users can bulk assign clients');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({ organization_id: organizationId })
+        .in('id', clientIds);
+
+      if (error) {
+        console.error('Error bulk assigning clients:', error);
+        return false;
+      }
+
+      this.notifyClientsUpdated();
+      console.log('Bulk assignment completed:', clientIds.length, 'clients assigned to', organizationId);
+      return true;
+    } catch (error) {
+      console.error('Error in bulk assignment:', error);
+      return false;
+    }
+  }
+
+  // Admin-specific method to get unassigned clients
+  async getUnassignedClients(): Promise<Client[]> {
+    const currentOrgId = await this.getCurrentOrganizationId();
+    
+    // Only admins can use this method
+    if (currentOrgId !== 'admin') {
+      console.error('Only admin users can fetch unassigned clients');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .is('organization_id', null)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching unassigned clients:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error in getUnassignedClients:', error);
+      return [];
+    }
+  }
 }
 
 export const clientStore = new ClientStore();

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Phone, Users, Shield, Bell, Database, Mail, Lock, User } from "lucide-react";
+import { ArrowLeft, Phone, Users, Shield, Bell, Database, Mail, Lock, User, UserCheck, Settings as SettingsIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useUserRole } from "@/components/UserRoleProvider";
 import { AdminPasswordModal } from "@/components/AdminPasswordModal";
@@ -16,6 +16,8 @@ import { NotificationSettings } from "@/components/settings/NotificationSettings
 import { DatabaseSettings } from "@/components/settings/DatabaseSettings";
 import { EmailSettings } from "@/components/settings/EmailSettings";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
+import BulkLeadAssignment from "@/components/settings/BulkLeadAssignment";
+import SubaccountResources from "@/components/settings/SubaccountResources";
 
 const Settings = () => {
   const { userRole, isAdmin } = useUserRole();
@@ -54,8 +56,20 @@ const Settings = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="email" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8">
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-10">
+            <TabsTrigger value="users" className="flex items-center space-x-2">
+              <Users className="h-4 w-4" />
+              <span>Users</span>
+            </TabsTrigger>
+            <TabsTrigger value="lead-assignment" className="flex items-center space-x-2">
+              <UserCheck className="h-4 w-4" />
+              <span>Lead Assignment</span>
+            </TabsTrigger>
+            <TabsTrigger value="resources" className="flex items-center space-x-2">
+              <SettingsIcon className="h-4 w-4" />
+              <span>Resources</span>
+            </TabsTrigger>
             <TabsTrigger value="email" className="flex items-center space-x-2">
               <Mail className="h-4 w-4" />
               <span>Email</span>
@@ -72,10 +86,6 @@ const Settings = () => {
               <Phone className="h-4 w-4" />
               <span>Phone Numbers</span>
             </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span>Users</span>
-            </TabsTrigger>
             <TabsTrigger value="security" className="flex items-center space-x-2">
               <Shield className="h-4 w-4" />
               <span>Security</span>
@@ -89,6 +99,18 @@ const Settings = () => {
               <span>Database</span>
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="users">
+            <UserManagement />
+          </TabsContent>
+
+          <TabsContent value="lead-assignment">
+            <BulkLeadAssignment />
+          </TabsContent>
+
+          <TabsContent value="resources">
+            <SubaccountResources />
+          </TabsContent>
 
           <TabsContent value="email">
             <EmailSettings />
@@ -104,10 +126,6 @@ const Settings = () => {
 
           <TabsContent value="phone-numbers">
             <PhoneNumberManager />
-          </TabsContent>
-
-          <TabsContent value="users">
-            <UserManagement />
           </TabsContent>
 
           <TabsContent value="security">

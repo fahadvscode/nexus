@@ -160,9 +160,9 @@ DECLARE
   user_role TEXT;
 BEGIN
   -- Get user role directly from user_profiles (no RLS on this table)
-  SELECT role INTO user_role
-  FROM public.user_profiles 
-  WHERE user_id = auth.uid() AND is_active = true;
+  SELECT up.role INTO user_role
+  FROM public.user_profiles up 
+  WHERE up.user_id = auth.uid() AND up.is_active = true;
   
   -- Check if user is admin
   IF user_role != 'admin' THEN
@@ -193,9 +193,9 @@ DECLARE
   user_role TEXT;
 BEGIN
   -- Get user role directly from user_profiles (no RLS on this table)
-  SELECT role INTO user_role
-  FROM public.user_profiles 
-  WHERE user_id = auth.uid() AND is_active = true;
+  SELECT up.role INTO user_role
+  FROM public.user_profiles up 
+  WHERE up.user_id = auth.uid() AND up.is_active = true;
   
   -- Check if user is admin
   IF user_role != 'admin' THEN

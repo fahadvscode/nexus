@@ -333,4 +333,133 @@ INSERT INTO public.call_logs (
   'Left a voicemail about our upcoming promotion',
   'testuser',
   ARRAY['callback-required']
+) ON CONFLICT (id) DO NOTHING;
+
+-- Create admin organization for info@fahadsold.com
+INSERT INTO public.organizations (
+  id,
+  name,
+  description,
+  owner_id,
+  created_by,
+  is_active
+) VALUES (
+  'c0000000-0000-0000-0000-000000000002',
+  'Admin Organization',
+  'Main admin organization for system management',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  true
+) ON CONFLICT (id) DO NOTHING;
+
+-- Insert sample clients for the admin organization
+INSERT INTO public.clients (
+  id,
+  user_id,
+  organization_id,
+  name,
+  phone,
+  email,
+  address,
+  status,
+  source,
+  tags
+) VALUES 
+(
+  'd0000000-0000-0000-0000-000000000003',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'c0000000-0000-0000-0000-000000000002',
+  'Michael Johnson',
+  '+1555123456',
+  'michael@example.com',
+  '789 Pine St, Admin City, USA',
+  'active',
+  'direct',
+  ARRAY['vip', 'enterprise']
+),
+(
+  'd0000000-0000-0000-0000-000000000004',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'c0000000-0000-0000-0000-000000000002',
+  'Sarah Wilson',
+  '+1555987654',
+  'sarah@example.com',
+  '321 Elm Ave, Admin Town, USA',
+  'lead',
+  'referral',
+  ARRAY['hot-lead', 'priority']
+) ON CONFLICT (id) DO NOTHING;
+
+-- Insert some unassigned clients (no organization_id) for bulk assignment testing
+INSERT INTO public.clients (
+  id,
+  user_id,
+  name,
+  phone,
+  email,
+  address,
+  status,
+  source,
+  tags,
+  organization_id
+) VALUES 
+(
+  'd0000000-0000-0000-0000-000000000010',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'Alex Turner',
+  '+1555111000',
+  'alex.turner@example.com',
+  '100 New Lead St, Unassigned City, USA',
+  'lead',
+  'website',
+  ARRAY['new-lead', 'qualified'],
+  NULL
+),
+(
+  'd0000000-0000-0000-0000-000000000011',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'Emma Davis',
+  '+1555222000',
+  'emma.davis@example.com',
+  '200 Prospect Ave, Lead Town, USA',
+  'lead',
+  'cold-call',
+  ARRAY['warm-lead'],
+  NULL
+),
+(
+  'd0000000-0000-0000-0000-000000000012',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'David Brown',
+  '+1555333000',
+  'david.brown@example.com',
+  '300 Opportunity Blvd, Prospect City, USA',
+  'potential',
+  'referral',
+  ARRAY['high-value', 'enterprise'],
+  NULL
+),
+(
+  'd0000000-0000-0000-0000-000000000013',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'Lisa Rodriguez',
+  '+1555444000',
+  'lisa.rodriguez@example.com',
+  '400 Business Park Dr, Commerce City, USA',
+  'lead',
+  'social-media',
+  ARRAY['interested', 'follow-up'],
+  NULL
+),
+(
+  'd0000000-0000-0000-0000-000000000014',
+  'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+  'Ryan Miller',
+  '+1555555000',
+  'ryan.miller@example.com',
+  '500 Innovation Way, Tech Valley, USA',
+  'potential',
+  'trade-show',
+  ARRAY['tech-savvy', 'decision-maker'],
+  NULL
 ) ON CONFLICT (id) DO NOTHING; 
