@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -167,6 +166,10 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
               <DialogTitle className="text-2xl">Bulk Import Clients</DialogTitle>
               <p className="text-sm text-gray-600 mt-1">
                 Import multiple clients at once using a CSV file
+              </p>
+              {/* Deployment verification */}
+              <p className="text-xs text-blue-600 mt-1">
+                🔄 Version: 286c980 - Organization feature enabled
               </p>
             </div>
           </div>
