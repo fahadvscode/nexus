@@ -47,7 +47,7 @@ export const useBulkUpload = () => {
     uploadedClients: NewClient[];
   } | null>(null);
 
-  const handleFileUpload = async (file: File, fieldMapping?: Record<string, string>) => {
+  const handleFileUpload = async (file: File, fieldMapping?: Record<string, string>, organizationId?: string) => {
     if (!file) return;
 
     console.log('=== BULK UPLOAD STARTED ===');
@@ -202,7 +202,8 @@ export const useBulkUpload = () => {
         // If admin, use dedicated admin bulk upload method
         if (profile?.role === 'admin') {
           console.log('🔧 Admin user detected - using dedicated admin method');
-          await clientStore.addMultipleClientsAsAdmin(clientsToInsert, userId);
+          console.log('🎯 Organization ID for assignment:', organizationId);
+          await clientStore.addMultipleClientsAsAdmin(clientsToInsert, userId, organizationId);
         } else {
           // For subaccount users, use the existing method
           console.log('🏢 Subaccount user detected - using regular method');

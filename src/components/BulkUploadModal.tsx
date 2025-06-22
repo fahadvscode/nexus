@@ -22,6 +22,7 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
   const [step, setStep] = useState<'upload' | 'mapping' | 'processing' | 'results'>('upload');
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [selectedOrganization, setSelectedOrganization] = useState<string>('admin');
   const { uploading, results, uploadProgress, handleFileUpload, resetResults } = useBulkUpload();
 
   const resetModal = () => {
@@ -29,6 +30,7 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
     setStep('upload');
     setCsvHeaders([]);
     setFieldMapping({});
+    setSelectedOrganization('admin');
     resetResults();
   };
 
@@ -129,7 +131,7 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
   const onUpload = async () => {
     if (file && isRequiredFieldsMapped()) {
       setStep('processing');
-      await handleFileUpload(file, fieldMapping);
+      await handleFileUpload(file, fieldMapping, selectedOrganization);
       setStep('results');
     }
   };
@@ -184,6 +186,8 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
               csvHeaders={csvHeaders}
               fieldMapping={fieldMapping}
               onMappingChange={setFieldMapping}
+              selectedOrganization={selectedOrganization}
+              onOrganizationChange={setSelectedOrganization}
             />
           )}
 

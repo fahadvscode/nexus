@@ -3,12 +3,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle, RotateCcw } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { ArrowRight, CheckCircle, RotateCcw, Building } from "lucide-react";
+import { useUserManagement } from "@/hooks/useUserManagement";
 
 interface FieldMappingStepProps {
   csvHeaders: string[];
   fieldMapping: Record<string, string>;
   onMappingChange: (mapping: Record<string, string>) => void;
+  selectedOrganization?: string;
+  onOrganizationChange?: (orgId: string) => void;
 }
 
 const requiredFields = [
@@ -34,7 +38,10 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
   csvHeaders,
   fieldMapping,
   onMappingChange,
+  selectedOrganization,
+  onOrganizationChange,
 }) => {
+  const { allOrganizations, allProfiles, isAdmin } = useUserManagement();
   const handleFieldChange = (crmField: string, csvHeader: string) => {
     const newMapping = { ...fieldMapping };
     if (csvHeader === 'none') {
@@ -140,6 +147,65 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Organization Selection (Admin Only) */}
+      {isAdmin() && onOrganizationChange && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center">
+              <Building className="h-4 w-4 mr-2" />
+              Organization Assignment
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <Label htmlFor="organization-select">
+                Assign imported clients to:
+              </Label>
+              <Select 
+                value={selectedOrganization || 'admin'} 
+                onValueChange={onOrganizationChange}
+              >
+                <SelectTrigger id="organization-select">
+                  <SelectValue placeholder="Select organization..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">
+                    <div className="flex items-center">
+                      <Badge variant="default" className="mr-2 text-xs">Admin</Badge>
+                      Admin Pool (Unassigned)
+                    </div>
+                  </SelectItem>
+                  {allOrganizations
+                    .filter(org => 
+                      allProfiles.some(profile => 
+                        profile.user_id === org.owner_id && profile.role === 'subaccount'
+                      )
+                    )
+                    .map((org) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        <div className="flex items-center">
+                          <Badge variant="secondary" className="mr-2 text-xs">Subaccount</Badge>
+                          {org.name}
+                          {org.description && (
+                            <span className="text-muted-foreground ml-2">
+                              - {org.description}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-600">
+                {selectedOrganization === 'admin' || !selectedOrganization
+                  ? 'Clients will be assigned to the admin pool and visible only to admin users.'
+                  : 'Clients will be assigned to the selected subaccount organization.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         <Card>

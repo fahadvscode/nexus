@@ -291,7 +291,7 @@ class ClientStore {
   }
 
   // Admin-specific method for bulk client upload
-  async addMultipleClientsAsAdmin(clients: NewClient[], userId: string): Promise<Client[]> {
+  async addMultipleClientsAsAdmin(clients: NewClient[], userId: string, organizationId?: string): Promise<Client[]> {
     const currentOrgId = await this.getCurrentOrganizationId();
     
     // Only admins can use this method
@@ -302,6 +302,10 @@ class ClientStore {
 
     console.log('🔧 Admin bulk upload - inserting clients directly');
     console.log('📝 Clients to insert:', clients.length);
+    console.log('🏢 Target organization:', organizationId || 'admin (unassigned)');
+
+    // Determine the organization_id to use
+    const targetOrgId = organizationId === 'admin' || !organizationId ? null : organizationId;
 
     try {
       const { data, error } = await supabase
@@ -316,7 +320,7 @@ class ClientStore {
           tags: client.tags || [],
           last_contact: client.last_contact,
           user_id: userId,
-          organization_id: null, // Explicitly set to null for unassigned clients
+          organization_id: targetOrgId, // Use selected organization or null for admin
         })))
         .select();
 
