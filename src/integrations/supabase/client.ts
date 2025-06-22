@@ -6,7 +6,20 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ipizfawpzzwdltcbskim.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwaXpmYXdwenp3ZGx0Y2Jza2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTg0MDEwNTQsImV4cCI6MjAzMzk3NzA1NH0.DYOrE7D3-YurEMsAfT0LZ6o7nnS2TS7oQIEYcJQ_fpo";
 
+// Service role key for admin operations (only use for server-side operations)
+const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwaXpmYXdwenp3ZGx0Y2Jza2ltIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTcxODQwMTA1NCwiZXhwIjoyMDMzOTc3MDU0fQ.m0S8E67FfwJvXyRfCPW3xGBZjFnXGlQ8cLCYqE8RlxM";
+
+// Regular client for normal operations
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+// Admin client for server-side operations (creating users, etc.)
+export const supabaseAdmin = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
-
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// import { supabaseAdmin } from "@/integrations/supabase/client"; // For admin operations

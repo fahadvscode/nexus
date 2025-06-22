@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseAdmin } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
@@ -117,8 +117,8 @@ export const useUserManagement = () => {
     }
 
     try {
-      // Step 1: Create the user account
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Step 1: Create the user account using admin client
+      const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: data.email,
         password: data.password,
         email_confirm: true,
@@ -246,8 +246,8 @@ export const useUserManagement = () => {
     }
 
     try {
-      // Delete the user (this will cascade delete profile and organization due to foreign keys)
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      // Delete the user using admin client (this will cascade delete profile and organization due to foreign keys)
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
       if (error) {
         toast({
