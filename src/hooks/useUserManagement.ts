@@ -116,6 +116,15 @@ export const useUserManagement = () => {
       return false;
     }
 
+    if (!supabaseAdmin) {
+      toast({
+        title: 'Configuration Error',
+        description: 'Service role key not configured. Please set VITE_SUPABASE_SERVICE_ROLE_KEY environment variable.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
     try {
       // Step 1: Create the user account using admin client
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -240,6 +249,15 @@ export const useUserManagement = () => {
       toast({
         title: 'Access Denied',
         description: 'Only admins can delete subaccounts',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    if (!supabaseAdmin) {
+      toast({
+        title: 'Configuration Error',
+        description: 'Service role key not configured. Please set VITE_SUPABASE_SERVICE_ROLE_KEY environment variable.',
         variant: 'destructive',
       });
       return false;
