@@ -143,9 +143,11 @@ class ClientStore {
   async addMultipleClients(clients: NewClient[]): Promise<Client[]> {
     const organizationId = await this.getCurrentOrganizationId();
     
-    // Admins cannot directly add clients - they need to specify an organization
+    // Admins should not use this method - they should use direct insertion or admin-specific methods
     if (organizationId === 'admin') {
-      console.error('Admin users must specify an organization when adding clients');
+      console.error('❌ Admin users must specify an organization when adding clients');
+      console.error('💡 Admin users should use direct database insertion or admin-specific methods');
+      console.error('🔧 This suggests the bulk upload is not using the correct admin path');
       return [];
     }
 

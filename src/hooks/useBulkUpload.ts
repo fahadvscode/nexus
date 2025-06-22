@@ -189,6 +189,10 @@ export const useBulkUpload = () => {
           .eq('user_id', user?.id)
           .single();
 
+        console.log('🔍 User profile check:', profile);
+        console.log('🔍 User role:', profile?.role);
+        console.log('🔍 Is admin?', profile?.role === 'admin');
+
         // Prepare clients for database insertion
         const clientsToInsert: NewClient[] = validClients.map(client => ({
           ...client,
@@ -230,6 +234,7 @@ export const useBulkUpload = () => {
           console.log('🔄 Notified client store to refresh');
         } else {
           // For subaccount users, use the existing method
+          console.log('🏢 Subaccount user detected - using regular method');
           await clientStore.addMultipleClients(clientsToInsert);
           console.log('Subaccount bulk imported clients successfully:', validClients.length);
         }
