@@ -292,20 +292,31 @@ class ClientStore {
 
   // Admin-specific method for bulk client upload
   async addMultipleClientsAsAdmin(clients: NewClient[], userId: string, organizationId?: string): Promise<Client[]> {
+    console.log('🔧 ===== ENTERING addMultipleClientsAsAdmin =====');
+    console.log('🔧 Method called with:', { 
+      clientCount: clients.length, 
+      userId, 
+      organizationId: organizationId || 'admin (unassigned)' 
+    });
+    
     const currentOrgId = await this.getCurrentOrganizationId();
+    console.log('🔧 Current organization ID check result:', currentOrgId);
     
     // Only admins can use this method
     if (currentOrgId !== 'admin') {
       console.error('❌ Only admin users can use addMultipleClientsAsAdmin');
+      console.error('❌ Current org ID:', currentOrgId, 'Expected: admin');
       return [];
     }
 
+    console.log('✅ Admin check passed - proceeding with bulk upload');
     console.log('🔧 Admin bulk upload - inserting clients directly');
     console.log('📝 Clients to insert:', clients.length);
     console.log('🏢 Target organization:', organizationId || 'admin (unassigned)');
 
     // Determine the organization_id to use
     const targetOrgId = organizationId === 'admin' || !organizationId ? null : organizationId;
+    console.log('🎯 Final target org ID (null = admin pool):', targetOrgId);
 
     try {
       const { data, error } = await supabase
@@ -330,7 +341,7 @@ class ClientStore {
       }
       
       console.log('✅ Admin bulk upload successful:', data?.length);
-      console.log('📋 Uploaded client data:', data);
+      console.log('📋 Uploaded client data preview:', data?.slice(0, 3));
       
       // Notify store to refresh client list
       this.notifyClientsUpdated();
