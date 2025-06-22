@@ -40,33 +40,38 @@ class ClientStore {
   async getAllClients(): Promise<Client[]> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      console.log('No user logged in, cannot fetch clients.');
+      console.log('❌ No user logged in, cannot fetch clients.');
       return [];
     }
 
     const organizationId = await this.getCurrentOrganizationId();
+    console.log('🔍 Organization ID for current user:', organizationId);
     
     // If admin, return all clients
     if (organizationId === 'admin') {
+      console.log('👑 Admin user detected - fetching ALL clients');
       const { data, error } = await supabase
         .from('clients')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching all clients (admin):', error);
+        console.error('❌ Error fetching all clients (admin):', error);
         return [];
       }
-      return data;
+      console.log('📊 Admin fetched clients:', data?.length || 0, 'total clients');
+      console.log('📋 Client data preview:', data?.slice(0, 3));
+      return data || [];
     }
 
     // If no organization, return empty array
     if (!organizationId) {
-      console.log('No organization found for user, cannot fetch clients.');
+      console.log('⚠️ No organization found for user, cannot fetch clients.');
       return [];
     }
 
     // For subaccount users, filter by organization
+    console.log('🏢 Subaccount user - filtering by organization:', organizationId);
     const { data, error } = await supabase
       .from('clients')
       .select('*')
@@ -74,10 +79,11 @@ class ClientStore {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching clients:', error);
+      console.error('❌ Error fetching clients:', error);
       return [];
     }
-    return data;
+    console.log('📊 Subaccount fetched clients:', data?.length || 0, 'clients');
+    return data || [];
   }
 
   async addClient(client: NewClient): Promise<Client | null> {

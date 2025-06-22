@@ -61,17 +61,20 @@ export const ClientTable = () => {
   } | null>(null);
   const [showCallOutcome, setShowCallOutcome] = useState(false);
 
-  const loadClients = async () => {
+  const fetchClients = async () => {
     setIsLoading(true);
     try {
-      const allClients = await clientStore.getAllClients();
-      setClients(allClients);
-      console.log('Loaded clients:', allClients.length);
+      console.log('🔍 Fetching clients for admin user...');
+      const clientList = await clientStore.getAllClients();
+      console.log('📊 Fetched clients:', clientList.length, 'clients');
+      console.log('📋 Client details:', clientList);
+      
+      setClients(clientList);
     } catch (error) {
-      console.error('Error loading clients:', error);
+      console.error('❌ Error fetching clients:', error);
       toast({
         title: "Error",
-        description: "Failed to load clients. Please refresh the page.",
+        description: "Failed to load clients. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -80,14 +83,14 @@ export const ClientTable = () => {
   };
 
   useEffect(() => {
-    loadClients();
+    fetchClients();
   }, [refreshKey]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'nexus-crm-clients') {
         console.log('Client store updated, refreshing table...');
-        loadClients();
+        fetchClients();
       }
     };
 
@@ -95,7 +98,7 @@ export const ClientTable = () => {
     
     const handleCustomRefresh = () => {
       console.log('Custom refresh event received, refreshing table...');
-      loadClients();
+      fetchClients();
     };
     
     window.addEventListener('clientsUpdated', handleCustomRefresh);
@@ -178,7 +181,7 @@ export const ClientTable = () => {
       title: "Call Completed",
       description: "Call has been logged successfully.",
     });
-    loadClients(); // Refresh the client list
+    fetchClients(); // Refresh the client list
   };
 
   const handleSaveCall = async (callLog: Omit<CallLog, 'id'>) => {
@@ -199,7 +202,7 @@ export const ClientTable = () => {
       }
       
       setCurrentCall(null);
-      loadClients(); // Refresh the client list
+      fetchClients(); // Refresh the client list
     } catch (error) {
       toast({
         title: "Error",

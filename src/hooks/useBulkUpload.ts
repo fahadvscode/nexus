@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { parseCSV } from "@/utils/csvUtils";
@@ -198,7 +197,9 @@ export const useBulkUpload = () => {
         
         // If admin, add clients without organization (they'll be unassigned)
         if (profile?.role === 'admin') {
-          console.log('Admin user detected - adding clients as unassigned');
+          console.log('🔧 Admin user detected - adding clients as unassigned');
+          console.log('📝 Clients to insert:', clientsToInsert.length);
+          
           // For admin users, directly insert into database without organization_id
           const { data, error } = await supabase
             .from('clients')
@@ -217,13 +218,16 @@ export const useBulkUpload = () => {
             .select();
 
           if (error) {
-            console.error('Error adding clients for admin:', error);
+            console.error('❌ Error adding clients for admin:', error);
             throw error;
           }
           
-          console.log('Admin bulk imported clients successfully:', data?.length);
+          console.log('✅ Admin bulk imported clients successfully:', data?.length);
+          console.log('📋 Imported client data:', data);
+          
           // Notify store to refresh client list
           clientStore.notifyClientsUpdated();
+          console.log('🔄 Notified client store to refresh');
         } else {
           // For subaccount users, use the existing method
           await clientStore.addMultipleClients(clientsToInsert);
