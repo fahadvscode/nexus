@@ -289,6 +289,55 @@ class ClientStore {
       return [];
     }
   }
+
+  // Admin-specific method for bulk client upload
+  async addMultipleClientsAsAdmin(clients: NewClient[], userId: string): Promise<Client[]> {
+    const currentOrgId = await this.getCurrentOrganizationId();
+    
+    // Only admins can use this method
+    if (currentOrgId !== 'admin') {
+      console.error('❌ Only admin users can use addMultipleClientsAsAdmin');
+      return [];
+    }
+
+    console.log('🔧 Admin bulk upload - inserting clients directly');
+    console.log('📝 Clients to insert:', clients.length);
+
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .insert(clients.map(client => ({
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+          address: client.address || '',
+          status: client.status || 'lead',
+          source: client.source || 'Import',
+          tags: client.tags || [],
+          last_contact: client.last_contact,
+          user_id: userId,
+          organization_id: null, // Explicitly set to null for unassigned clients
+        })))
+        .select();
+
+      if (error) {
+        console.error('❌ Error in admin bulk upload:', error);
+        return [];
+      }
+      
+      console.log('✅ Admin bulk upload successful:', data?.length);
+      console.log('📋 Uploaded client data:', data);
+      
+      // Notify store to refresh client list
+      this.notifyClientsUpdated();
+      console.log('🔄 Notified client store to refresh');
+      
+      return data || [];
+    } catch (error) {
+      console.error('❌ Exception in admin bulk upload:', error);
+      return [];
+    }
+  }
 }
 
 export const clientStore = new ClientStore();

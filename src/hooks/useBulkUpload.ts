@@ -199,39 +199,10 @@ export const useBulkUpload = () => {
           user_id: userId,
         }));
         
-        // If admin, add clients without organization (they'll be unassigned)
+        // If admin, use dedicated admin bulk upload method
         if (profile?.role === 'admin') {
-          console.log('🔧 Admin user detected - adding clients as unassigned');
-          console.log('📝 Clients to insert:', clientsToInsert.length);
-          
-          // For admin users, directly insert into database without organization_id
-          const { data, error } = await supabase
-            .from('clients')
-            .insert(clientsToInsert.map(client => ({
-              name: client.name,
-              email: client.email,
-              phone: client.phone,
-              address: client.address || '',
-              status: client.status || 'lead',
-              source: client.source || 'Import',
-              tags: client.tags || [],
-              last_contact: client.last_contact,
-              user_id: userId,
-              organization_id: null, // Explicitly set to null for unassigned clients
-            })))
-            .select();
-
-          if (error) {
-            console.error('❌ Error adding clients for admin:', error);
-            throw error;
-          }
-          
-          console.log('✅ Admin bulk imported clients successfully:', data?.length);
-          console.log('📋 Imported client data:', data);
-          
-          // Notify store to refresh client list
-          clientStore.notifyClientsUpdated();
-          console.log('🔄 Notified client store to refresh');
+          console.log('🔧 Admin user detected - using dedicated admin method');
+          await clientStore.addMultipleClientsAsAdmin(clientsToInsert, userId);
         } else {
           // For subaccount users, use the existing method
           console.log('🏢 Subaccount user detected - using regular method');
