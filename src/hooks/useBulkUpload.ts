@@ -182,16 +182,19 @@ export const useBulkUpload = () => {
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id || 'anonymous';
         
-        // Check if user is admin
-        const { data: profile } = await supabase
+        console.log('🔍 Current user ID:', userId);
+        
+        // Check if user is admin with comprehensive debugging
+        const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
-          .select('role')
+          .select('role, is_active')
           .eq('user_id', user?.id)
           .single();
 
-        console.log('🔍 User profile check:', profile);
-        console.log('🔍 User role:', profile?.role);
-        console.log('🔍 Is admin?', profile?.role === 'admin');
+        console.log('🔍 Profile query result:', { profile, profileError });
+        console.log('🔍 User role from profile:', profile?.role);
+        console.log('🔍 Is admin check result:', profile?.role === 'admin');
+        console.log('🔍 Organization ID parameter:', organizationId);
 
         // Prepare clients for database insertion
         const clientsToInsert: NewClient[] = validClients.map(client => ({
@@ -199,16 +202,33 @@ export const useBulkUpload = () => {
           user_id: userId,
         }));
         
-        // If admin, use dedicated admin bulk upload method
-        if (profile?.role === 'admin') {
-          console.log('🔧 Admin user detected - using dedicated admin method');
-          console.log('🎯 Organization ID for assignment:', organizationId);
-          await clientStore.addMultipleClientsAsAdmin(clientsToInsert, userId, organizationId);
+        console.log('🔍 Clients prepared for insertion:', clientsToInsert.length);
+        
+        // CRITICAL: Check admin status and route accordingly
+        const isAdminUser = profile?.role === 'admin';
+        console.log('🚨 ROUTING DECISION: Is admin user?', isAdminUser);
+        
+        if (isAdminUser) {
+          console.log('🔧 ✅ ADMIN PATH: Using addMultipleClientsAsAdmin method');
+          console.log('🎯 Organization ID for assignment:', organizationId || 'admin (unassigned)');
+          
+          try {
+            const result = await clientStore.addMultipleClientsAsAdmin(clientsToInsert, userId, organizationId);
+            console.log('✅ Admin bulk upload completed successfully:', result.length, 'clients');
+          } catch (adminError) {
+            console.error('❌ Admin bulk upload failed:', adminError);
+            throw adminError;
+          }
         } else {
-          // For subaccount users, use the existing method
-          console.log('🏢 Subaccount user detected - using regular method');
-          await clientStore.addMultipleClients(clientsToInsert);
-          console.log('Subaccount bulk imported clients successfully:', validClients.length);
+          console.log('🏢 ✅ SUBACCOUNT PATH: Using regular addMultipleClients method');
+          
+          try {
+            const result = await clientStore.addMultipleClients(clientsToInsert);
+            console.log('✅ Subaccount bulk upload completed successfully:', result.length, 'clients');
+          } catch (subaccountError) {
+            console.error('❌ Subaccount bulk upload failed:', subaccountError);
+            throw subaccountError;
+          }
         }
       }
 
