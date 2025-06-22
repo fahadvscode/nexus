@@ -183,15 +183,52 @@ export const useBulkUpload = () => {
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id || 'anonymous';
         
+        // Check if user is admin
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('role')
+          .eq('user_id', user?.id)
+          .single();
+
         // Prepare clients for database insertion
         const clientsToInsert: NewClient[] = validClients.map(client => ({
           ...client,
           user_id: userId,
         }));
         
-        await clientStore.addMultipleClients(clientsToInsert);
-        
-        console.log('Bulk imported clients successfully:', validClients.length);
+        // If admin, add clients without organization (they'll be unassigned)
+        if (profile?.role === 'admin') {
+          console.log('Admin user detected - adding clients as unassigned');
+          // For admin users, directly insert into database without organization_id
+          const { data, error } = await supabase
+            .from('clients')
+            .insert(clientsToInsert.map(client => ({
+              name: client.name,
+              email: client.email,
+              phone: client.phone,
+              address: client.address || '',
+              status: client.status || 'lead',
+              source: client.source || 'Import',
+              tags: client.tags || [],
+              last_contact: client.last_contact,
+              user_id: userId,
+              organization_id: null, // Explicitly set to null for unassigned clients
+            })))
+            .select();
+
+          if (error) {
+            console.error('Error adding clients for admin:', error);
+            throw error;
+          }
+          
+          console.log('Admin bulk imported clients successfully:', data?.length);
+          // Notify store to refresh client list
+          clientStore.notifyClientsUpdated();
+        } else {
+          // For subaccount users, use the existing method
+          await clientStore.addMultipleClients(clientsToInsert);
+          console.log('Subaccount bulk imported clients successfully:', validClients.length);
+        }
       }
 
       setUploadProgress({ progress: 100, status: "Import complete!" });

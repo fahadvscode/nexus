@@ -7,7 +7,7 @@ export type NewClient = TablesInsert<'clients'>;
 // Centralized client store using Supabase for persistence with organization-based isolation
 class ClientStore {
   // Dispatch custom event to notify components of changes
-  private notifyClientsUpdated(): void {
+  notifyClientsUpdated(): void {
     window.dispatchEvent(new CustomEvent('clientsUpdated'));
   }
 
