@@ -167,9 +167,9 @@ export const BulkUploadModal = ({ open, onOpenChange }: Props) => {
               <p className="text-sm text-gray-600 mt-1">
                 Import multiple clients at once using a CSV file
               </p>
-              {/* Deployment verification */}
-              <p className="text-xs text-blue-600 mt-1">
-                🔄 Version: 349d949 - Enhanced admin debugging active
+              {/* Success indicator */}
+              <p className="text-xs text-green-600 mt-1">
+                ✅ Version: 996a7a3 - Admin bulk upload fixed & working
               </p>
             </div>
           </div>

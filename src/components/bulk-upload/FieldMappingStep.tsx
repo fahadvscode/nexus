@@ -143,15 +143,10 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
           Match your CSV columns to the CRM fields below. Auto-mapping has been applied, but you can manually adjust any field mappings.
         </p>
         
-        {/* DEPLOYMENT TEST - This should be visible if deployment worked */}
-        <div className="bg-yellow-100 border border-yellow-300 rounded p-2 my-2">
-          <p className="text-yellow-800 text-sm">
-            🚀 Deployment Test: Enhanced admin debugging active - Version 349d949
-          </p>
-          <p className="text-xs text-yellow-700 mt-1">
-            Admin status: {isAdmin() ? '✅ ADMIN USER' : '❌ Not admin'} | 
-            Organizations: {allOrganizations?.length || 0} | 
-            Handler: {!!onOrganizationChange ? '✅ Available' : '❌ Missing'}
+        {/* Success indicator - deployment working */}
+        <div className="bg-green-100 border border-green-300 rounded p-2 my-2">
+          <p className="text-green-800 text-sm">
+            ✅ Organization feature active | Admin: {isAdmin() ? 'YES' : 'NO'} | Organizations: {allOrganizations?.length || 0}
           </p>
         </div>
         

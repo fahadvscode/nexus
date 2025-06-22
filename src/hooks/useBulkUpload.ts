@@ -196,15 +196,6 @@ export const useBulkUpload = () => {
         console.log('🔍 Is admin check result:', profile?.role === 'admin');
         console.log('🔍 Organization ID parameter:', organizationId);
 
-        // EXPLICIT DEBUGGING - Check profile data structure
-        console.log('🔍 EXPLICIT DEBUGGING:');
-        console.log('  - Profile object:', JSON.stringify(profile, null, 2));
-        console.log('  - Profile.role type:', typeof profile?.role);
-        console.log('  - Profile.role value:', profile?.role);
-        console.log('  - String comparison:', `"${profile?.role}" === "admin"`);
-        console.log('  - Exact equality:', profile?.role === 'admin');
-        console.log('  - Loose equality:', profile?.role == 'admin');
-
         // Prepare clients for database insertion
         const clientsToInsert: NewClient[] = validClients.map(client => ({
           ...client,
@@ -213,17 +204,12 @@ export const useBulkUpload = () => {
         
         console.log('🔍 Clients prepared for insertion:', clientsToInsert.length);
         
-        // CRITICAL: Check admin status and route accordingly
+        // Check admin status and route accordingly
         const isAdminUser = profile?.role === 'admin';
         console.log('🚨 ROUTING DECISION: Is admin user?', isAdminUser);
         
-        // FORCE ADMIN PATH FOR TESTING - Remove this after debugging
-        const forceAdminPath = profile?.role === 'admin' || user?.email === 'info@fahadsold.com';
-        console.log('🔧 FORCE ADMIN PATH (for testing):', forceAdminPath);
-        console.log('🔧 User email:', user?.email);
-        
-        if (forceAdminPath) {
-          console.log('🔧 ✅ ADMIN PATH (FORCED): Using addMultipleClientsAsAdmin method');
+        if (isAdminUser) {
+          console.log('🔧 ✅ ADMIN PATH: Using addMultipleClientsAsAdmin method');
           console.log('🎯 Organization ID for assignment:', organizationId || 'admin (unassigned)');
           
           try {
