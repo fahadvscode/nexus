@@ -20,5 +20,27 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Suppress browser extension console noise -->
+    <script>
+      // Filter out browser extension errors that aren't related to our application
+      const originalError = console.error;
+      console.error = function(...args) {
+        const message = args.join(' ');
+        
+        // Skip browser extension related errors
+        if (message.includes('extensionState.js') || 
+            message.includes('heuristicsRedefinitions.js') ||
+            message.includes('utils.js') ||
+            message.includes('background.js') ||
+            message.includes('Extension manifest must request permission') ||
+            message.includes('Failed to load resource: net::ERR_FILE_NOT_FOUND')) {
+          return; // Don't log these errors
+        }
+        
+        // Log all other errors normally
+        originalError.apply(console, args);
+      };
+    </script>
   </body>
 </html>

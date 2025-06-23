@@ -12,11 +12,11 @@ import { useUserManagement } from '@/hooks/useUserManagement';
 import { clientStore, Client } from '@/store/clientStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Users, ArrowRight, CheckCircle } from 'lucide-react';
+import { Users, ArrowRight, CheckCircle, RefreshCw, Info } from 'lucide-react';
 
 const BulkLeadAssignment = () => {
   const { isAdmin } = useUserRole();
-  const { allOrganizations, allProfiles } = useUserManagement();
+  const { allOrganizations, allProfiles, refreshData } = useUserManagement();
   const { toast } = useToast();
   
   const [allClients, setAllClients] = useState<Client[]>([]);
@@ -134,14 +134,57 @@ const BulkLeadAssignment = () => {
     allProfiles.some(profile => profile.user_id === org.owner_id && profile.role === 'subaccount')
   );
 
+  // Debug logging to help troubleshoot
+  console.log('🔍 BulkLeadAssignment Debug Info:');
+  console.log('📊 All Organizations:', allOrganizations);
+  console.log('👥 All Profiles:', allProfiles);
+  console.log('🏢 Subaccount Organizations:', subaccountOrganizations);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Bulk Lead Assignment</h2>
-        <p className="text-muted-foreground">
-          Assign multiple clients/leads to subaccounts in bulk
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Bulk Lead Assignment</h2>
+          <p className="text-muted-foreground">
+            Assign multiple clients/leads to subaccounts in bulk
+          </p>
+        </div>
+        <Button variant="outline" onClick={refreshData}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh Data
+        </Button>
       </div>
+
+      {/* Debug Information */}
+      {subaccountOrganizations.length === 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800">
+              <Info className="h-5 w-5" />
+              No Subaccounts Found
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-yellow-800">
+            <div className="space-y-2 text-sm">
+              <p><strong>Organizations loaded:</strong> {allOrganizations.length}</p>
+              <p><strong>User profiles loaded:</strong> {allProfiles.length}</p>
+              <p><strong>Subaccount profiles:</strong> {allProfiles.filter(p => p.role === 'subaccount').length}</p>
+              
+              {allOrganizations.length === 0 && (
+                <p className="text-red-600">⚠️ No organizations data loaded. Check the debug panel in Settings → Users tab.</p>
+              )}
+              
+              {allProfiles.length === 0 && (
+                <p className="text-red-600">⚠️ No user profiles data loaded. Check the debug panel in Settings → Users tab.</p>
+              )}
+              
+              {allOrganizations.length > 0 && allProfiles.length > 0 && subaccountOrganizations.length === 0 && (
+                <p className="text-blue-600">ℹ️ Organizations and profiles are loaded, but no subaccounts found. Create subaccounts in the Users tab first.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Source Selection */}
       <Card>
@@ -166,6 +209,17 @@ const BulkLeadAssignment = () => {
                       {org.name}
                     </SelectItem>
                   ))}
+                  {/* Show all organizations temporarily for debugging */}
+                  {allOrganizations.length > 0 && subaccountOrganizations.length === 0 && (
+                    <>
+                      <SelectItem disabled value="debug-separator">--- Debug: All Organizations ---</SelectItem>
+                      {allOrganizations.map((org) => (
+                        <SelectItem key={`debug-${org.id}`} value={org.id}>
+                          🔧 {org.name} (Debug)
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -274,6 +328,22 @@ const BulkLeadAssignment = () => {
                         )}
                       </SelectItem>
                     ))}
+                    {/* Show all organizations temporarily for debugging */}
+                    {allOrganizations.length > 0 && subaccountOrganizations.length === 0 && (
+                      <>
+                        <SelectItem disabled value="debug-separator">--- Debug: All Organizations ---</SelectItem>
+                        {allOrganizations.map((org) => (
+                          <SelectItem key={`debug-target-${org.id}`} value={org.id}>
+                            🔧 {org.name} (Debug)
+                            {org.description && (
+                              <span className="text-muted-foreground ml-2">
+                                - {org.description}
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
