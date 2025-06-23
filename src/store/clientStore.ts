@@ -11,41 +11,91 @@ class ClientStore {
     window.dispatchEvent(new CustomEvent('clientsUpdated'));
   }
 
-  // Get current user's organization ID
-  private async getCurrentOrganizationId(): Promise<string | null> {
+  // CRITICAL: Validate user role matches email for security
+  private async validateUserRole(): Promise<{ isValid: boolean; role: 'admin' | 'subaccount' | null; email: string | null }> {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) {
+      console.log('❌ No user logged in');
+      return { isValid: false, role: null, email: null };
+    }
 
-    // First check if user is admin - admins can see all data
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('role')
+      .select('role, email')
       .eq('user_id', user.id)
       .single();
 
-    if (profile?.role === 'admin') {
-      return 'admin'; // Special case for admin access
+    if (!profile) {
+      console.error('🚨 No profile found for user');
+      return { isValid: false, role: null, email: null };
+    }
+
+    const sessionEmail = user.email;
+    const profileEmail = profile.email;
+
+    console.log('🔐 Role validation:', { sessionEmail, profileEmail, role: profile.role });
+
+    // STRICT validation - session email must match profile email
+    if (sessionEmail !== profileEmail) {
+      console.error('🚨 EMAIL MISMATCH in client store - session/profile mismatch!');
+      return { isValid: false, role: null, email: sessionEmail };
+    }
+
+    // Validate role matches expected email
+    if (sessionEmail === 'info@fahadsold.com' && profile.role !== 'admin') {
+      console.error('🚨 ROLE MISMATCH: info@fahadsold.com should be admin but is', profile.role);
+      return { isValid: false, role: profile.role as 'admin' | 'subaccount', email: sessionEmail };
+    }
+
+    if (sessionEmail === 'nav@fahadsold.com' && profile.role !== 'subaccount') {
+      console.error('🚨 ROLE MISMATCH: nav@fahadsold.com should be subaccount but is', profile.role);
+      return { isValid: false, role: profile.role as 'admin' | 'subaccount', email: sessionEmail };
+    }
+
+    console.log('✅ Role validation passed');
+    return { isValid: true, role: profile.role as 'admin' | 'subaccount', email: sessionEmail };
+  }
+
+  // Get current user's organization ID
+  private async getCurrentOrganizationId(): Promise<string | null> {
+    const validation = await this.validateUserRole();
+    if (!validation.isValid) {
+      console.error('🚨 User role validation failed - cannot get organization ID');
+      return null;
+    }
+
+    // Admin users have special access to all data
+    if (validation.role === 'admin') {
+      console.log('👑 Admin user confirmed - returning admin access');
+      return 'admin';
     }
 
     // For subaccount users, get their organization ID
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
     const { data: organization } = await supabase
       .from('organizations')
       .select('id')
       .eq('owner_id', user.id)
       .single();
 
-    return organization?.id || null;
+    const orgId = organization?.id || null;
+    console.log('🏢 Subaccount organization ID:', orgId);
+    return orgId;
   }
 
   async getAllClients(): Promise<Client[]> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log('❌ No user logged in, cannot fetch clients.');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid) {
+      console.error('🚨 Role validation failed - cannot fetch clients');
       return [];
     }
 
     const organizationId = await this.getCurrentOrganizationId();
     console.log('🔍 Organization ID for current user:', organizationId);
+    console.log('📧 Validated user email:', validation.email);
+    console.log('🎭 Validated user role:', validation.role);
     
     // If admin, return all clients
     if (organizationId === 'admin') {
@@ -87,6 +137,12 @@ class ClientStore {
   }
 
   async addClient(client: NewClient): Promise<Client | null> {
+    const validation = await this.validateUserRole();
+    if (!validation.isValid) {
+      console.error('🚨 Role validation failed - cannot add client');
+      return null;
+    }
+
     const organizationId = await this.getCurrentOrganizationId();
     
     // Admins cannot directly add clients - they need to specify an organization
@@ -123,6 +179,12 @@ class ClientStore {
   }
 
   async updateClient(clientId: string, updates: Partial<Client>): Promise<Client | null> {
+    const validation = await this.validateUserRole();
+    if (!validation.isValid) {
+      console.error('🚨 Role validation failed - cannot update client');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('clients')
       .update(updates)
@@ -141,6 +203,12 @@ class ClientStore {
   }
 
   async addMultipleClients(clients: NewClient[]): Promise<Client[]> {
+    const validation = await this.validateUserRole();
+    if (!validation.isValid) {
+      console.error('🚨 Role validation failed - cannot add multiple clients');
+      return [];
+    }
+
     const organizationId = await this.getCurrentOrganizationId();
     
     // Admins should not use this method - they should use direct insertion or admin-specific methods
@@ -179,11 +247,9 @@ class ClientStore {
 
   // Admin-specific method to add clients to a specific organization
   async addClientToOrganization(client: NewClient, organizationId: string): Promise<Client | null> {
-    const currentOrgId = await this.getCurrentOrganizationId();
-    
-    // Only admins can use this method
-    if (currentOrgId !== 'admin') {
-      console.error('Only admin users can add clients to specific organizations');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid || validation.role !== 'admin') {
+      console.error('🚨 Only validated admin users can add clients to specific organizations');
       return null;
     }
 
@@ -210,11 +276,9 @@ class ClientStore {
 
   // Admin-specific method to get clients for a specific organization
   async getClientsForOrganization(organizationId: string): Promise<Client[]> {
-    const currentOrgId = await this.getCurrentOrganizationId();
-    
-    // Only admins can use this method
-    if (currentOrgId !== 'admin') {
-      console.error('Only admin users can fetch clients for specific organizations');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid || validation.role !== 'admin') {
+      console.error('🚨 Only validated admin users can fetch clients for specific organizations');
       return [];
     }
 
@@ -233,11 +297,9 @@ class ClientStore {
 
   // Admin-specific method for bulk client assignment
   async bulkAssignClients(clientIds: string[], organizationId: string): Promise<boolean> {
-    const currentOrgId = await this.getCurrentOrganizationId();
-    
-    // Only admins can use this method
-    if (currentOrgId !== 'admin') {
-      console.error('Only admin users can bulk assign clients');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid || validation.role !== 'admin') {
+      console.error('🚨 Only validated admin users can bulk assign clients');
       return false;
     }
 
@@ -263,11 +325,9 @@ class ClientStore {
 
   // Admin-specific method to get unassigned clients
   async getUnassignedClients(): Promise<Client[]> {
-    const currentOrgId = await this.getCurrentOrganizationId();
-    
-    // Only admins can use this method
-    if (currentOrgId !== 'admin') {
-      console.error('Only admin users can fetch unassigned clients');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid || validation.role !== 'admin') {
+      console.error('🚨 Only validated admin users can fetch unassigned clients');
       return [];
     }
 
@@ -292,20 +352,17 @@ class ClientStore {
 
   // Admin-specific method for bulk client upload
   async addMultipleClientsAsAdmin(clients: NewClient[], userId: string, organizationId?: string): Promise<Client[]> {
-    console.log('🔧 Admin bulk upload started:', { 
-      clientCount: clients.length, 
-      organizationId: organizationId || 'admin (unassigned)' 
-    });
-    
-    const currentOrgId = await this.getCurrentOrganizationId();
-    
-    // Only admins can use this method
-    if (currentOrgId !== 'admin') {
-      console.error('❌ Only admin users can use addMultipleClientsAsAdmin');
+    const validation = await this.validateUserRole();
+    if (!validation.isValid || validation.role !== 'admin') {
+      console.error('🚨 Only validated admin users can use addMultipleClientsAsAdmin');
       return [];
     }
 
-    console.log('✅ Admin authorization confirmed - proceeding with bulk upload');
+    console.log('🔧 Admin bulk upload started:', { 
+      clientCount: clients.length, 
+      organizationId: organizationId || 'admin (unassigned)',
+      adminEmail: validation.email
+    });
 
     // Determine the organization_id to use
     const targetOrgId = organizationId === 'admin' || !organizationId ? null : organizationId;
