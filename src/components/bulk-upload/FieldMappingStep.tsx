@@ -43,11 +43,22 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
 }) => {
   const { allOrganizations, allProfiles, isAdmin } = useUserManagement();
   
-  // Debug logging to verify deployment
+  // Enhanced debug logging
   console.log('🔧 FieldMappingStep loaded - Organization feature active');
   console.log('👑 Is admin user?', isAdmin());
-  console.log('🏢 Available organizations:', allOrganizations?.length || 0);
+  console.log('🏢 All organizations raw:', JSON.stringify(allOrganizations, null, 2));
+  console.log('👥 All profiles raw:', JSON.stringify(allProfiles, null, 2));
   console.log('📋 Organization change handler available?', !!onOrganizationChange);
+  
+  // Filter subaccount organizations
+  const subaccountOrganizations = allOrganizations?.filter(org => 
+    allProfiles?.some(profile => 
+      profile.user_id === org.owner_id && profile.role === 'subaccount'
+    )
+  ) || [];
+  
+  console.log('🏢 Filtered subaccount organizations:', JSON.stringify(subaccountOrganizations, null, 2));
+  console.log('🔍 Looking for nav@fahadsold.com profile:', allProfiles?.find(p => p.email === 'nav@fahadsold.com'));
 
   const handleFieldChange = (crmField: string, csvHeader: string) => {
     const newMapping = { ...fieldMapping };
@@ -191,25 +202,19 @@ export const FieldMappingStep: React.FC<FieldMappingStepProps> = ({
                       Admin Pool (Unassigned)
                     </div>
                   </SelectItem>
-                  {allOrganizations
-                    .filter(org => 
-                      allProfiles.some(profile => 
-                        profile.user_id === org.owner_id && profile.role === 'subaccount'
-                      )
-                    )
-                    .map((org) => (
-                      <SelectItem key={org.id} value={org.id}>
-                        <div className="flex items-center">
-                          <Badge variant="secondary" className="mr-2 text-xs">Subaccount</Badge>
-                          {org.name}
-                          {org.description && (
-                            <span className="text-muted-foreground ml-2">
-                              - {org.description}
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
+                  {subaccountOrganizations.map((org) => (
+                    <SelectItem key={org.id} value={org.id}>
+                      <div className="flex items-center">
+                        <Badge variant="secondary" className="mr-2 text-xs">Subaccount</Badge>
+                        {org.name}
+                        {org.description && (
+                          <span className="text-muted-foreground ml-2">
+                            - {org.description}
+                          </span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-600">
