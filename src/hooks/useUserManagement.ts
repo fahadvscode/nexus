@@ -71,37 +71,102 @@ export const useUserManagement = () => {
 
   // Fetch all organizations (admin only)
   const fetchAllOrganizations = async () => {
-    if (!userProfile || userProfile.role !== 'admin') return;
+    if (!userProfile || userProfile.role !== 'admin') {
+      console.log('User is not admin, skipping organizations fetch');
+      return;
+    }
 
     try {
+      console.log('🏢 Fetching all organizations for admin user...');
       const { data: organizations, error } = await supabase.rpc('get_all_organizations_admin');
 
       if (error) {
-        console.error('Error fetching organizations:', error);
+        console.error('❌ Error fetching organizations:', error);
+        
+        // Handle specific error cases
+        if (error.message?.includes('Admin role required')) {
+          console.error('🚨 Current user does not have admin role in database');
+          toast({
+            title: 'Access Denied',
+            description: 'Your account does not have admin privileges. Please contact support.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'PGRST116') {
+          console.log('ℹ️ No organizations found - this is normal for new installations');
+          setAllOrganizations([]);
+        } else {
+          console.error('🔧 RPC function may not exist or there\'s a database connection issue');
+          toast({
+            title: 'Database Error',
+            description: 'Unable to fetch organization data. Please refresh the page.',
+            variant: 'destructive',
+          });
+        }
         return;
       }
 
-      setAllOrganizations(organizations || []);
+      console.log('✅ Organizations fetched successfully:', organizations?.length || 0);
+      // Ensure all required fields are present, add default settings if missing
+      const normalizedOrganizations = (organizations || []).map(org => ({
+        ...org,
+        settings: org.settings || null
+      }));
+      setAllOrganizations(normalizedOrganizations);
     } catch (error) {
-      console.error('Error in fetchAllOrganizations:', error);
+      console.error('💥 Unexpected error in fetchAllOrganizations:', error);
+      toast({
+        title: 'System Error',
+        description: 'An unexpected error occurred while fetching organization data.',
+        variant: 'destructive',
+      });
     }
   };
 
   // Fetch all user profiles (admin only)
   const fetchAllProfiles = async () => {
-    if (!userProfile || userProfile.role !== 'admin') return;
+    if (!userProfile || userProfile.role !== 'admin') {
+      console.log('User is not admin, skipping profiles fetch');
+      return;
+    }
 
     try {
+      console.log('👥 Fetching all user profiles for admin user...');
       const { data: profiles, error } = await supabase.rpc('get_all_profiles_admin');
 
       if (error) {
-        console.error('Error fetching profiles:', error);
+        console.error('❌ Error fetching profiles:', error);
+        
+        // Handle specific error cases
+        if (error.message?.includes('Admin role required')) {
+          console.error('🚨 Current user does not have admin role in database');
+          toast({
+            title: 'Access Denied',
+            description: 'Your account does not have admin privileges. Please contact support.',
+            variant: 'destructive',
+          });
+        } else if (error.code === 'PGRST116') {
+          console.log('ℹ️ No user profiles found - this is normal for new installations');
+          setAllProfiles([]);
+        } else {
+          console.error('🔧 RPC function may not exist or there\'s a database connection issue');
+          toast({
+            title: 'Database Error',
+            description: 'Unable to fetch user profile data. Please refresh the page.',
+            variant: 'destructive',
+          });
+        }
         return;
       }
 
+      console.log('✅ User profiles fetched successfully:', profiles?.length || 0);
       setAllProfiles(profiles || []);
     } catch (error) {
-      console.error('Error in fetchAllProfiles:', error);
+      console.error('💥 Unexpected error in fetchAllProfiles:', error);
+      toast({
+        title: 'System Error',
+        description: 'An unexpected error occurred while fetching user profile data.',
+        variant: 'destructive',
+      });
     }
   };
 

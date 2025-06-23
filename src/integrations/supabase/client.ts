@@ -9,19 +9,86 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJh
 // Service role key for admin operations (get this from your Supabase project settings -> API)
 const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-// Regular client for normal operations
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Create singleton instances to prevent multiple GoTrueClient instances
+let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
+let supabaseAdminInstance: ReturnType<typeof createClient<Database>> | null = null;
 
-// Admin client for server-side operations (creating users, etc.)
-export const supabaseAdmin = SUPABASE_SERVICE_ROLE_KEY 
-  ? createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+// Regular client for normal operations - singleton pattern
+export const supabase = (() => {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storage: localStorage,
+        storageKey: 'sb-auth-token',
+      },
+      global: {
+        headers: {
+          'x-application-name': 'shield-crm'
+        }
+      }
+    });
+  }
+  return supabaseInstance;
+})();
+
+// Admin client for server-side operations (creating users, etc.) - singleton pattern
+export const supabaseAdmin = (() => {
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('VITE_SUPABASE_SERVICE_ROLE_KEY not set - admin operations will not work');
+    return null;
+  }
+  
+  if (!supabaseAdminInstance) {
+    supabaseAdminInstance = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false
+      },
+      global: {
+        headers: {
+          'x-application-name': 'shield-crm-admin'
+        }
       }
-    })
-  : null;
+    });
+  }
+  return supabaseAdminInstance;
+})();
+
+// Export utility functions for better error handling
+export const handleSupabaseError = (error: any, operation: string = 'database operation') => {
+  console.error(`Supabase error during ${operation}:`, error);
+  
+  if (error?.code === 'PGRST116') {
+    return { error: 'No data found', details: error };
+  }
+  
+  if (error?.code === '42501') {
+    return { error: 'Insufficient permissions', details: error };
+  }
+  
+  if (error?.message?.includes('JWT expired')) {
+    return { error: 'Session expired, please login again', details: error };
+  }
+  
+  return { error: error?.message || 'An unexpected error occurred', details: error };
+};
+
+// Check if user is authenticated and has valid session
+export const checkAuth = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Auth check error:', error);
+      return { isAuthenticated: false, session: null, error };
+    }
+    return { isAuthenticated: !!session, session, error: null };
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    return { isAuthenticated: false, session: null, error };
+  }
+};
 
 // Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
-// import { supabaseAdmin } from "@/integrations/supabase/client"; // For admin operations
+// import { supabase, supabaseAdmin, handleSupabaseError, checkAuth } from "@/integrations/supabase/client";

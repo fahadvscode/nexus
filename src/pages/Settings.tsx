@@ -18,6 +18,7 @@ import { EmailSettings } from "@/components/settings/EmailSettings";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import BulkLeadAssignment from "@/components/settings/BulkLeadAssignment";
 import SubaccountResources from "@/components/settings/SubaccountResources";
+import { DebugUserRole } from "@/components/DebugUserRole";
 
 const Settings = () => {
   const { userRole, isAdmin } = useUserRole();
@@ -101,6 +102,7 @@ const Settings = () => {
           </TabsList>
 
           <TabsContent value="users">
+            <DebugUserRole />
             <UserManagement />
           </TabsContent>
 

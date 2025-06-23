@@ -285,6 +285,7 @@ export interface Database {
           owner_id: string
           created_by: string | null
           is_active: boolean | null
+          settings: Json | null
           created_at: string
           updated_at: string
         }[]
