@@ -304,21 +304,30 @@ class ClientStore {
     }
 
     try {
+      // Determine the target organization_id (null for admin pool, actual UUID for subaccounts)
+      const targetOrgId = organizationId === 'admin' ? null : organizationId;
+      
+      console.log('🔧 Bulk assignment started:', {
+        clientCount: clientIds.length,
+        targetOrganization: targetOrgId ? `Subaccount (${targetOrgId})` : 'Admin Pool (unassigned)',
+        adminEmail: validation.email
+      });
+
       const { error } = await supabase
         .from('clients')
-        .update({ organization_id: organizationId })
+        .update({ organization_id: targetOrgId })
         .in('id', clientIds);
 
       if (error) {
-        console.error('Error bulk assigning clients:', error);
+        console.error('❌ Error bulk assigning clients:', error);
         return false;
       }
 
       this.notifyClientsUpdated();
-      console.log('Bulk assignment completed:', clientIds.length, 'clients assigned to', organizationId);
+      console.log('✅ Bulk assignment completed:', clientIds.length, 'clients assigned to', targetOrgId ? `organization ${targetOrgId}` : 'admin pool');
       return true;
     } catch (error) {
-      console.error('Error in bulk assignment:', error);
+      console.error('❌ Error in bulk assignment:', error);
       return false;
     }
   }

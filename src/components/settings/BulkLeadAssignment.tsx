@@ -134,11 +134,21 @@ const BulkLeadAssignment = () => {
     allProfiles.some(profile => profile.user_id === org.owner_id && profile.role === 'subaccount')
   );
 
-  // Debug logging to help troubleshoot
+  // Enhanced debug logging to help troubleshoot
   console.log('🔍 BulkLeadAssignment Debug Info:');
   console.log('📊 All Organizations:', allOrganizations);
   console.log('👥 All Profiles:', allProfiles);
   console.log('🏢 Subaccount Organizations:', subaccountOrganizations);
+  console.log('🔧 Filtering logic check:');
+  allOrganizations.forEach(org => {
+    console.log(`  Org: ${org.name} (${org.id}), owner_id: ${org.owner_id}`);
+    const matchingProfile = allProfiles.find(profile => profile.user_id === org.owner_id);
+    console.log(`  Matching profile:`, matchingProfile);
+    if (matchingProfile) {
+      console.log(`    - Email: ${matchingProfile.email}, Role: ${matchingProfile.role}`);
+      console.log(`    - Is subaccount? ${matchingProfile.role === 'subaccount'}`);
+    }
+  });
 
   return (
     <div className="space-y-6">
@@ -146,8 +156,11 @@ const BulkLeadAssignment = () => {
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Bulk Lead Assignment</h2>
           <p className="text-muted-foreground">
-            Assign multiple clients/leads to subaccounts in bulk
+            Assign multiple clients/leads between the admin pool and subaccounts in bulk
           </p>
+          <div className="mt-2 text-sm text-blue-600">
+            ✨ You can now assign admin pool leads to any subaccount, or move leads between subaccounts
+          </div>
         </div>
         <Button variant="outline" onClick={refreshData}>
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -318,14 +331,26 @@ const BulkLeadAssignment = () => {
                     <SelectValue placeholder="Select target organization" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* Option to assign back to admin pool */}
+                    {sourceOrganization !== 'admin' && (
+                      <SelectItem value="admin">
+                        <div className="flex items-center">
+                          <Badge variant="default" className="mr-2 text-xs">Admin</Badge>
+                          Admin Pool (Unassigned)
+                        </div>
+                      </SelectItem>
+                    )}
                     {subaccountOrganizations.map((org) => (
                       <SelectItem key={org.id} value={org.id}>
-                        {org.name}
-                        {org.description && (
-                          <span className="text-muted-foreground ml-2">
-                            - {org.description}
-                          </span>
-                        )}
+                        <div className="flex items-center">
+                          <Badge variant="secondary" className="mr-2 text-xs">Subaccount</Badge>
+                          {org.name}
+                          {org.description && (
+                            <span className="text-muted-foreground ml-2">
+                              - {org.description}
+                            </span>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                     {/* Show all organizations temporarily for debugging */}
@@ -352,7 +377,7 @@ const BulkLeadAssignment = () => {
                 <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">
-                      Assign {selectedClients.length} clients
+                      Assign {selectedClients.length} clients from {getOrganizationName(sourceOrganization)}
                     </span>
                     <ArrowRight className="h-4 w-4" />
                     <span className="text-sm font-medium">
@@ -370,8 +395,13 @@ const BulkLeadAssignment = () => {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Confirm Bulk Assignment</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Are you sure you want to assign {selectedClients.length} clients to "{getOrganizationName(targetOrganization)}"? 
-                          This action will transfer ownership and cannot be easily undone.
+                          Are you sure you want to assign {selectedClients.length} clients from "{getOrganizationName(sourceOrganization)}" to "{getOrganizationName(targetOrganization)}"? 
+                          {targetOrganization === 'admin' ? 
+                            'This will move the clients back to the unassigned admin pool.' : 
+                            'This action will transfer ownership to the selected subaccount.'
+                          }
+                          <br /><br />
+                          <strong>Note:</strong> This action can be reversed by reassigning the clients later.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
