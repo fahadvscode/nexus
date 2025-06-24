@@ -19,6 +19,7 @@ import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import BulkLeadAssignment from "@/components/settings/BulkLeadAssignment";
 import SubaccountResources from "@/components/settings/SubaccountResources";
 import { DebugUserRole } from "@/components/DebugUserRole";
+import { TestAdminFunctions } from "@/components/TestAdminFunctions";
 
 const Settings = () => {
   const { userRole, isAdmin } = useUserRole();
@@ -103,6 +104,9 @@ const Settings = () => {
 
           <TabsContent value="users">
             <DebugUserRole />
+            <div className="mb-6">
+              <TestAdminFunctions />
+            </div>
             <UserManagement />
           </TabsContent>
 

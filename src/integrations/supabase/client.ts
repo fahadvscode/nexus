@@ -21,11 +21,14 @@ export const supabase = (() => {
         persistSession: true,
         autoRefreshToken: true,
         storage: localStorage,
-        storageKey: 'sb-auth-token',
+        storageKey: 'sb-shield-crm-auth', // Use unique storage key to prevent conflicts
+        detectSessionInUrl: true,
+        flowType: 'pkce'
       },
       global: {
         headers: {
-          'x-application-name': 'shield-crm'
+          'x-application-name': 'shield-crm',
+          'x-client-info': 'shield-crm-v1.0'
         }
       }
     });

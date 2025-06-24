@@ -3,13 +3,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Phone, PhoneCall, Wifi, WifiOff } from "lucide-react";
+import { Phone, PhoneCall, Wifi, WifiOff, Mic, MicOff } from "lucide-react";
 import { useTwilioStore } from "@/hooks/useTwilioStore";
 import { useToast } from "@/hooks/use-toast";
 
 export const QuickDialer = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
-  const { makeCall, isReady, isConnecting, error } = useTwilioStore();
+  const { 
+    makeCall, 
+    isReady, 
+    isConnecting, 
+    error, 
+    audioUnlocked, 
+    unlockAudio,
+    initializeDevice 
+  } = useTwilioStore();
   const { toast } = useToast();
 
   const handleDial = async () => {
@@ -58,6 +66,16 @@ export const QuickDialer = () => {
     setPhoneNumber(formatted);
   };
 
+  const handleUnlockAudio = async () => {
+    try {
+      await unlockAudio();
+      // After unlocking audio, try to initialize the device
+      await initializeDevice();
+    } catch (error) {
+      console.error('Failed to unlock audio:', error);
+    }
+  };
+
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
@@ -67,6 +85,19 @@ export const QuickDialer = () => {
             <span>Quick Dialer</span>
           </div>
           <div className="flex items-center space-x-2">
+            <Badge variant={audioUnlocked ? "default" : "destructive"} className="text-xs">
+              {audioUnlocked ? (
+                <>
+                  <Mic className="h-3 w-3 mr-1" />
+                  Mic Ready
+                </>
+              ) : (
+                <>
+                  <MicOff className="h-3 w-3 mr-1" />
+                  Mic Off
+                </>
+              )}
+            </Badge>
             <Badge variant={isReady ? "default" : "secondary"} className="text-xs">
               {isReady ? (
                 <>
@@ -96,6 +127,17 @@ export const QuickDialer = () => {
           />
         </div>
         
+        {!audioUnlocked && (
+          <Button
+            onClick={handleUnlockAudio}
+            className="w-full bg-orange-600 hover:bg-orange-700 mb-2"
+            size="lg"
+          >
+            <Mic className="h-5 w-5 mr-2" />
+            Enable Microphone Access
+          </Button>
+        )}
+
         <Button
           onClick={handleDial}
           disabled={isConnecting || !phoneNumber.trim() || !isReady}
@@ -106,9 +148,21 @@ export const QuickDialer = () => {
           {isConnecting ? "Dialing..." : "Dial Now"}
         </Button>
 
-        {!isReady && (
+        {!audioUnlocked && (
+          <p className="text-xs text-orange-600 text-center">
+            🎤 Microphone access required for calling. Click "Enable Microphone Access" above.
+          </p>
+        )}
+
+        {!isReady && audioUnlocked && (
           <p className="text-xs text-gray-500 text-center">
             Twilio device is initializing. Please wait...
+          </p>
+        )}
+
+        {error && error.includes('Microphone') && (
+          <p className="text-xs text-red-600 text-center">
+            ⚠️ {error}
           </p>
         )}
       </CardContent>

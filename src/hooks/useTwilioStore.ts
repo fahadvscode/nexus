@@ -99,16 +99,38 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     }
   },
 
-  unlockAudio: () => {
+  unlockAudio: async () => {
     const { audioUnlocked } = get();
     if (!audioUnlocked) {
       console.log('🔓 Unlocking audio context...');
-      set({ audioUnlocked: true });
-      console.log('🔓 Audio unlocked state set to true');
-      toast({
-        title: "Audio Unlocked",
-        description: "Ready to make calls.",
-      });
+      
+      try {
+        // Request microphone permissions explicitly
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('🎤 Microphone permission granted');
+        
+        // Stop the stream immediately since we just needed permissions
+        stream.getTracks().forEach(track => track.stop());
+        
+        set({ audioUnlocked: true });
+        console.log('🔓 Audio unlocked state set to true');
+        toast({
+          title: "Audio Unlocked",
+          description: "Microphone access granted. Ready to make calls.",
+        });
+      } catch (error) {
+        console.error('❌ Microphone permission denied:', error);
+        set({ 
+          audioUnlocked: false,
+          error: 'Microphone permission required for calls' 
+        });
+        toast({
+          title: "Microphone Permission Required",
+          description: "Please allow microphone access to make calls.",
+          variant: "destructive",
+        });
+        throw error;
+      }
     } else {
       console.log('🔓 Audio already unlocked');
     }
@@ -124,9 +146,14 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     }
 
     if (!audioUnlocked) {
-      console.log('Audio not unlocked. Waiting for user interaction.');
-      set({ error: 'Click anywhere on the page to enable calling.' });
-      return;
+      try {
+        console.log('🔓 Audio not unlocked. Requesting permissions...');
+        await get().unlockAudio();
+      } catch (error) {
+        console.error('❌ Failed to unlock audio:', error);
+        set({ error: 'Microphone permission required for calling. Please click the unlock audio button.' });
+        return;
+      }
     }
 
     try {
@@ -135,7 +162,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
       const token = await get().fetchTwilioToken();
       
-      // Create Twilio device with timeout
+      // Create Twilio device with standard configuration
       const newDevice = new Device(token, {
         logLevel: 1,
         edge: ['sydney', 'ashburn'],
@@ -380,6 +407,23 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
         try {
           console.log('🔄 Attempting real Twilio call...');
           
+          // Ensure audio permissions are granted before making the call
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+              }
+            });
+            console.log('🎤 Audio permissions confirmed for call');
+            // Stop the stream immediately since Twilio will acquire its own
+            stream.getTracks().forEach(track => track.stop());
+          } catch (audioError) {
+            console.error('❌ Audio permission error before call:', audioError);
+            throw new Error(`Microphone access required: ${audioError.message}`);
+          }
+          
           const call = await device.connect({
             params: {
               To: cleanNumber,
@@ -396,7 +440,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
             description: `Making real Twilio call to ${clientName || phoneNumber}`,
           });
 
-          console.log('✅ Real Twilio call initiated successfully:', call.parameters.CallSid);
+          console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
         } catch (twilioError: any) {
           console.log('⚠️ Real Twilio call failed, falling back to demo mode:', twilioError.message);
           toast({
