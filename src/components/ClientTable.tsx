@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Phone, Mail, MapPin, Search, Calendar, Tag, Edit, Shield, RefreshCw, Trash2, CheckSquare, Square, Download, CalendarPlus, Bell, PhoneCall } from "lucide-react";
+import { Phone, Mail, MapPin, Search, Calendar, Tag, Edit, Shield, RefreshCw, Trash2, CheckSquare, Square, Download, CalendarPlus, Bell, PhoneCall, User } from "lucide-react";
 import { useUserRole } from "@/components/UserRoleProvider";
 import { useToast } from "@/hooks/use-toast";
 import { Client } from "@/types/client";
@@ -21,6 +21,7 @@ import { CallLog } from "@/types/call";
 import { TwilioCallModal } from "./TwilioCallModal";
 import { EmailModal } from "./EmailModal";
 import { DialerModal } from "./DialerModal";
+import { DetailedLeadView } from "./DetailedLeadView";
 import { useTwilioStore } from "@/hooks/useTwilioStore";
 
 export const ClientTable = () => {
@@ -35,6 +36,7 @@ export const ClientTable = () => {
   const [reminderClient, setReminderClient] = useState<Client | null>(null);
   const [emailingClient, setEmailingClient] = useState<Client | null>(null);
   const [showDialer, setShowDialer] = useState(false);
+  const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const { userRole, blurEnabled } = useUserRole();
   const { toast } = useToast();
   const { makeCall } = useTwilioStore();
@@ -467,7 +469,12 @@ export const ClientTable = () => {
                               {client.name.split(' ').map(n => n[0]).join('')}
                             </div>
                             <div>
-                              <h3 className="font-semibold text-gray-900">{client.name}</h3>
+                              <h3 
+                                className="font-semibold text-gray-900 hover:text-blue-600 cursor-pointer transition-colors"
+                                onClick={() => setViewingClient(client)}
+                              >
+                                {client.name}
+                              </h3>
                               <span className="text-xs text-gray-500">{client.id}</span>
                             </div>
                           </div>
@@ -529,6 +536,16 @@ export const ClientTable = () => {
 
                     {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewingClient(client)}
+                        className="hover:bg-gray-50 hover:text-gray-700"
+                      >
+                        <User className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                      
                       <Button
                         variant="ghost"
                         size="sm"
@@ -648,6 +665,12 @@ export const ClientTable = () => {
         selectedClientIds={selectedClients}
         clients={clients.filter(client => selectedClients.includes(client.id))}
         onCallComplete={handleTwilioCallComplete}
+      />
+
+      <DetailedLeadView
+        open={!!viewingClient}
+        onOpenChange={(isOpen) => !isOpen && setViewingClient(null)}
+        client={viewingClient}
       />
     </>
   );
