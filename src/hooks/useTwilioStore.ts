@@ -377,18 +377,18 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       console.error('❌ Call error:', error);
       
       // Handle all call errors
-      set({ 
-        activeCall: null,
-        isConnecting: false,
-        callDuration: 0,
-        error: error.message || 'Call error occurred' 
-      });
+        set({ 
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          error: error.message || 'Call error occurred' 
+        });
       
-      toast({
-        title: "Call Error",
-        description: error.message || 'An error occurred during the call',
-        variant: "destructive",
-      });
+        toast({
+          title: "Call Error",
+          description: error.message || 'An error occurred during the call',
+          variant: "destructive",
+        });
     });
 
     call.on('mute', (isMuted) => {
