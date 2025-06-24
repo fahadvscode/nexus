@@ -43,12 +43,9 @@ export const CallTestButton = () => {
       return '📞 Call Active';
     }
     if (isReady && device) {
-      return '✅ Twilio Ready (Real Calls)';
+      return '✅ Twilio Ready';
     }
-    if (isReady && !device) {
-      return '🎭 Demo Mode Active';
-    }
-    if (error && !error.includes('Demo Mode')) {
+    if (error) {
       return '❌ Error: ' + error;
     }
     return '🔄 Initializing...';
@@ -76,12 +73,12 @@ export const CallTestButton = () => {
           {!activeCall ? (
             <Button
               onClick={handleTestCall}
-              disabled={!isReady || isConnecting}
+              disabled={!isReady || isConnecting || !device}
               className="bg-green-600 hover:bg-green-700"
               size="sm"
             >
               <Phone className="h-4 w-4 mr-2" />
-              {isConnecting ? 'Connecting...' : (device ? 'Make Real Call' : 'Test Demo Call')}
+              {isConnecting ? 'Connecting...' : 'Make Call'}
             </Button>
           ) : (
             <Button
@@ -97,7 +94,7 @@ export const CallTestButton = () => {
         <p className="text-xs text-gray-500">
           {device 
             ? 'This will make an actual call via Twilio using your configured phone number' 
-            : 'This will simulate a call for testing purposes'
+            : 'Twilio device not ready. Please wait for initialization.'
           }
         </p>
       </div>

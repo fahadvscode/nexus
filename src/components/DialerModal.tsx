@@ -152,7 +152,7 @@ export const DialerModal = ({
 
   useEffect(() => {
     // This effect handles the case where a call ends unexpectedly (e.g., the other party hangs up).
-    if (callStatus === 'closed' && dialerClients[currentIndex]?.callStatus === 'calling') {
+    if (callStatus === 'idle' && dialerClients[currentIndex]?.callStatus === 'calling') {
       handleCallEnd('failed');
     }
   }, [callStatus, currentIndex, dialerClients, handleCallEnd]);
@@ -363,15 +363,15 @@ export const DialerModal = ({
           {/* Controls */}
           <div className="flex justify-center space-x-4">
             {!isDialerActive ? (
-              <Button
-                onClick={startDialer}
-                size="lg"
-                className="bg-green-600 hover:bg-green-700"
-                disabled={dialerClients.length === 0}
-              >
-                <Play className="h-5 w-5 mr-2" />
-                Start Real Calls
-              </Button>
+                              <Button
+                  onClick={startDialer}
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={dialerClients.length === 0}
+                >
+                  <Play className="h-5 w-5 mr-2" />
+                  Start Calls
+                </Button>
             ) : (
               <>
                 <Button

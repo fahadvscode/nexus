@@ -102,7 +102,7 @@ export const QuickDialer = () => {
               {isReady ? (
                 <>
                   <Wifi className="h-3 w-3 mr-1" />
-                  {error?.includes('Demo Mode') ? 'Demo Mode' : 'Twilio Ready'}
+                  Twilio Ready
                 </>
               ) : (
                 <>

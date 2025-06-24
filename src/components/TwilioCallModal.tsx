@@ -215,7 +215,7 @@ export const TwilioCallModal = ({ open, onOpenChange, callData, onCallComplete }
           )}
 
           <div className="text-center text-sm text-gray-500">
-            <p>🎯 Calling through Twilio Voice</p>
+            <p>🎯 Real call through Twilio Voice</p>
             <p>Audio will play through your computer speakers/headset</p>
           </div>
         </div>
