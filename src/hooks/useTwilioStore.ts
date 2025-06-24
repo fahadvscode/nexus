@@ -41,6 +41,17 @@ interface TwilioStore {
   handleIncomingCall: (call: Call) => void;
 }
 
+const startCallTimer = (set: any) => {
+  const timer = setInterval(() => {
+    set((state: TwilioStore) => ({
+      callDuration: state.callDuration + 1
+    }));
+  }, 1000);
+  return timer;
+};
+
+let callTimer: NodeJS.Timeout | null = null;
+
 export const useTwilioStore = create<TwilioStore>((set, get) => ({
   // Initial state
   device: null,
