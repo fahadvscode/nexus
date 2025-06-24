@@ -16,35 +16,55 @@ serve(async (req) => {
     
     // Check for authorization header
     const authHeader = req.headers.get('Authorization')
+    console.log('🔍 All request headers:', Object.fromEntries(req.headers.entries()))
+    
     if (!authHeader) {
       console.error('❌ No Authorization header found')
       throw new Error('Authorization header required')
     }
     
     console.log('✅ Authorization header found')
+    console.log('🔍 Auth header length:', authHeader.length)
 
-    // Create a Supabase client with the user's auth token
+    // Create a Supabase client with service role for server-side validation
+    console.log('🔍 Creating Supabase client with service role...')
+    console.log('🔍 SUPABASE_URL:', Deno.env.get('SUPABASE_URL'))
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { 
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
+    
+    // Manually verify the JWT token
+    console.log('🔍 Manually verifying JWT token...')
+    const jwt = authHeader.replace('Bearer ', '')
+    console.log('🔍 JWT length:', jwt.length)
 
-    // Get the user from the auth token
-    console.log('🔍 Validating user session...')
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    // Get the user from the JWT token using service role client
+    console.log('🔍 Validating user with JWT token...')
+    console.log('🔍 Auth header:', authHeader.substring(0, 20) + '...')
+    
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(jwt)
     
     if (userError) {
       console.error('❌ User validation error:', userError)
+      console.error('❌ Error details:', JSON.stringify(userError, null, 2))
       throw new Error(`User validation failed: ${userError.message}`)
     }
     
     if (!user) {
-      console.error('❌ No user found in session')
-      throw new Error('User not found - invalid session')
+      console.error('❌ No user found for JWT token')
+      throw new Error('User not found - invalid JWT token')
     }
     
-    console.log('✅ User validated:', user.email)
+    console.log('✅ User validated from JWT:', user.email)
+    console.log('✅ User ID:', user.id)
 
     // Get Twilio credentials from environment variables (using Auth Token approach)
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
@@ -67,12 +87,20 @@ serve(async (req) => {
     }
     console.log('✅ All Twilio credentials found')
     console.log('🔧 Using Auth Token authentication')
+    console.log('🔍 Account SID:', accountSid?.substring(0, 10) + '...')
+    console.log('🔍 Auth Token:', authToken?.substring(0, 8) + '...')
+    console.log('🔍 TwiML App SID:', twimlAppSid?.substring(0, 10) + '...')
     
     // Manually construct the JWT for Twilio using Auth Token
     const identity = user.email!
     const now = Math.floor(Date.now() / 1000)
     const exp = now + 3600 // 1 hour expiration
     const jti = `${accountSid}-${now}`
+
+    console.log('🔍 Token parameters:')
+    console.log('🔍 Identity:', identity)
+    console.log('🔍 Current time:', now)
+    console.log('🔍 Expiration:', exp)
 
     // JWT Header - exactly as per Twilio specification
     const header = { 
@@ -102,11 +130,16 @@ serve(async (req) => {
       }
     }
 
+    console.log('🔍 JWT Header:', JSON.stringify(header))
     console.log('🔧 JWT Payload:', JSON.stringify(payload, null, 2))
 
     const headerB64 = base64Encode(new TextEncoder().encode(JSON.stringify(header))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     const payloadB64 = base64Encode(new TextEncoder().encode(JSON.stringify(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     const unsignedToken = `${headerB64}.${payloadB64}`
+    
+    console.log('🔍 Header B64:', headerB64)
+    console.log('🔍 Payload B64:', payloadB64)
+    console.log('🔍 Unsigned token length:', unsignedToken.length)
     
     // Use Auth Token as the signing key
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(authToken), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
@@ -114,6 +147,9 @@ serve(async (req) => {
     const signatureB64 = base64Encode(new Uint8Array(signature)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     const token = `${unsignedToken}.${signatureB64}`
 
+    console.log('🔍 Signature B64:', signatureB64)
+    console.log('🔍 Final token length:', token.length)
+    console.log('🔍 Token preview:', token.substring(0, 50) + '...')
     console.log('✅ Twilio token generated successfully for user:', user.email)
     console.log('🎯 Token preview:', token.substring(0, 50) + '...')
     
@@ -121,8 +157,13 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
-    console.error('❌ Twilio token generation failed:', error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('❌ Twilio token generation failed:', error)
+    console.error('❌ Error stack:', error.stack)
+    
+    const errorMessage = error.message || 'Unknown error occurred'
+    console.error('❌ Returning error response:', errorMessage)
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
