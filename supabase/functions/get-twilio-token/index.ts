@@ -11,16 +11,39 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔄 Processing Twilio token request...')
+    
+    // Check for authorization header
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      console.error('❌ No Authorization header found')
+      throw new Error('Authorization header required')
+    }
+    
+    console.log('✅ Authorization header found')
+
     // Create a Supabase client with the user's auth token
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { global: { headers: { Authorization: authHeader } } }
     )
 
     // Get the user from the auth token
-    const { data: { user } } = await supabaseClient.auth.getUser()
-    if (!user) throw new Error('User not found')
+    console.log('🔍 Validating user session...')
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    
+    if (userError) {
+      console.error('❌ User validation error:', userError)
+      throw new Error(`User validation failed: ${userError.message}`)
+    }
+    
+    if (!user) {
+      console.error('❌ No user found in session')
+      throw new Error('User not found - invalid session')
+    }
+    
+    console.log('✅ User validated:', user.email)
 
     // Get Twilio credentials from environment variables
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
@@ -29,10 +52,24 @@ serve(async (req) => {
     const twimlAppSid = Deno.env.get('TWIML_APP_SID')
     
     // Check for missing credentials
-    if (!accountSid) throw new Error('TWILIO_ACCOUNT_SID not found')
-    if (!apiKeySid) throw new Error('TWILIO_API_KEY_SID not found')
-    if (!apiKeySecret) throw new Error('TWILIO_API_KEY_SECRET not found')
-    if (!twimlAppSid) throw new Error('TWIML_APP_SID not found')
+    console.log('🔍 Checking Twilio credentials...')
+    if (!accountSid) {
+      console.error('❌ TWILIO_ACCOUNT_SID not found')
+      throw new Error('TWILIO_ACCOUNT_SID not found')
+    }
+    if (!apiKeySid) {
+      console.error('❌ TWILIO_API_KEY_SID not found')
+      throw new Error('TWILIO_API_KEY_SID not found')
+    }
+    if (!apiKeySecret) {
+      console.error('❌ TWILIO_API_KEY_SECRET not found')
+      throw new Error('TWILIO_API_KEY_SECRET not found')
+    }
+    if (!twimlAppSid) {
+      console.error('❌ TWIML_APP_SID not found')
+      throw new Error('TWIML_APP_SID not found')
+    }
+    console.log('✅ All Twilio credentials found')
     
     // Manually construct the JWT for Twilio
     const identity = user.email!
@@ -63,10 +100,12 @@ serve(async (req) => {
     const signatureB64 = base64Encode(new Uint8Array(signature)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     const token = `${unsignedToken}.${signatureB64}`
 
+    console.log('✅ Twilio token generated successfully for user:', user.email)
     return new Response(JSON.stringify({ token }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
+    console.error('❌ Twilio token generation failed:', error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
