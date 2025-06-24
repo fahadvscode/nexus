@@ -26,10 +26,24 @@ serve(async (req) => {
     console.log('🔍 Auth header length:', authHeader.length)
 
     // Create a Supabase client with the user's auth token
+    console.log('🔍 Creating Supabase client...')
+    console.log('🔍 SUPABASE_URL:', Deno.env.get('SUPABASE_URL'))
+    console.log('🔍 Using auth header for client creation')
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { 
+        global: { 
+          headers: { 
+            Authorization: authHeader 
+          } 
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
     )
 
     // Get the user from the auth token
