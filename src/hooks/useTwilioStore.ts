@@ -67,9 +67,24 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   // Actions
   fetchTwilioToken: async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      // Try to refresh the session first
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
       
-      if (!session) {
+      if (sessionError || !session) {
+        console.error('❌ Session refresh failed:', sessionError);
+        // Fallback to getting current session
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) {
+          throw new Error('No active session found. Please log in again.');
+        }
+        console.log('🔄 Using current session for Twilio token...');
+      } else {
+        console.log('✅ Session refreshed successfully');
+      }
+
+      const activeSession = session || await supabase.auth.getSession().then(({ data: { session } }) => session);
+      
+      if (!activeSession) {
         throw new Error('No active session found');
       }
 
@@ -77,13 +92,18 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
       const { data, error } = await supabase.functions.invoke('get-twilio-token', {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${activeSession.access_token}`,
         },
       });
       
       if (error) {
         console.error('Token fetch error:', error);
-        throw new Error(`Failed to get token: ${error.message}`);
+        // Try to get more specific error message from the response
+        let errorMessage = error.message;
+        if (data?.error) {
+          errorMessage = data.error;
+        }
+        throw new Error(`Failed to get token: ${errorMessage}`);
       }
       
       if (!data?.token) {
@@ -231,7 +251,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
       toast({
         title: "Initialization Failed",
-        description: "Twilio initialization failed. Please check your configuration.",
+        description: err.message || "Twilio initialization failed. Please check your configuration.",
         variant: "destructive",
       });
     }
