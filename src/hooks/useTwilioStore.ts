@@ -43,6 +43,17 @@ interface TwilioStore {
   handleIncomingCall: (call: Call) => void;
 }
 
+const startCallTimer = (set: any) => {
+  const timer = setInterval(() => {
+    set((state: TwilioStore) => ({
+      callDuration: state.callDuration + 1
+    }));
+  }, 1000);
+  return timer;
+};
+
+let callTimer: NodeJS.Timeout | null = null;
+
 export const useTwilioStore = create<TwilioStore>((set, get) => ({
   // Initial state
   device: null,
@@ -69,53 +80,93 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   // Actions
   fetchTwilioToken: async () => {
     try {
+      let activeSession = null;
+      
       // Try to refresh the session first
+      console.log('🔄 Attempting to refresh session...');
       const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
       
       if (sessionError || !session) {
-        console.error('❌ Session refresh failed:', sessionError);
+        console.log('⚠️ Session refresh failed, trying to get current session:', sessionError?.message);
         // Fallback to getting current session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!currentSession) {
+        const { data: { session: currentSession }, error: getCurrentError } = await supabase.auth.getSession();
+        if (getCurrentError || !currentSession) {
+          console.error('❌ No active session available:', getCurrentError?.message);
           throw new Error('No active session found. Please log in again.');
         }
+        activeSession = currentSession;
         console.log('🔄 Using current session for Twilio token...');
       } else {
+        activeSession = session;
         console.log('✅ Session refreshed successfully');
       }
 
-      const activeSession = session || await supabase.auth.getSession().then(({ data: { session } }) => session);
-      
       if (!activeSession) {
         throw new Error('No active session found');
       }
 
+      // Check if session is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (activeSession.expires_at && activeSession.expires_at < now) {
+        console.error('❌ Session is expired:', {
+          expiresAt: new Date(activeSession.expires_at * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Session has expired. Please refresh the page and log in again.');
+      }
+
       console.log('🔄 Fetching Twilio token...');
       console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v4 - NBF FIELD INCLUDED');
+      console.log('🔐 Using session for user:', activeSession.user?.email);
+      console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
+      console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
       
-      const { data, error } = await supabase.functions.invoke('get-twilio-token', {
+      // Try direct fetch instead of supabase.functions.invoke
+      console.log('🔄 Making direct fetch request...');
+      const response = await fetch('https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token', {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${activeSession.access_token}`,
+          'Authorization': `Bearer ${activeSession.access_token}`,
+          'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
           'x-application-name': 'nexus-crm',
         },
       });
       
+      console.log('🔄 Response status:', response.status);
+      console.log('🔄 Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Direct fetch error response:', errorText);
+        throw new Error(`Failed to get token: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      const error = null; // No error if we got here
+      
       if (error) {
-        console.error('Token fetch error:', error);
+        console.error('❌ Token fetch error:', error);
+        console.error('❌ Function error context:', error.context);
+        
         // Try to get more specific error message from the response
-        let errorMessage = error.message;
-        if (data?.error) {
+        let errorMessage = error.message || 'Unknown error';
+        if (error.context?.error) {
+          errorMessage = error.context.error;
+        } else if (data?.error) { // Fallback
           errorMessage = data.error;
         }
+        console.error('❌ Specific error from function:', errorMessage);
+        
         throw new Error(`Failed to get token: ${errorMessage}`);
       }
       
       if (!data?.token) {
+        console.error('❌ No token in response:', data);
         throw new Error('No token returned from server');
       }
       
-      console.log('✅ Twilio token received');
+      console.log('✅ Twilio token received successfully');
       
       // DEBUG: Decode and log the actual token structure
       try {
@@ -264,15 +315,30 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     } catch (err: any) {
       console.error('❌ Failed to initialize Twilio device:', err);
       
+      // Extract more specific error message
+      let errorMessage = err.message || err.toString();
+      let toastDescription = errorMessage;
+      
+      // Check for common error patterns and provide better messages
+      if (errorMessage.includes('Auth session missing')) {
+        toastDescription = "Your session has expired. Please refresh the page and log in again.";
+      } else if (errorMessage.includes('User not found')) {
+        toastDescription = "User authentication failed. Please log in again.";
+      } else if (errorMessage.includes('TWILIO_')) {
+        toastDescription = "Twilio configuration error. Please check your Twilio credentials.";
+      } else if (errorMessage.includes('Failed to get token')) {
+        toastDescription = "Failed to get Twilio token. Please check your authentication and try again.";
+      }
+      
       set({ 
-        error: `Initialization failed: ${err.message || err}`,
+        error: `Initialization failed: ${errorMessage}`,
         isReady: false,
         isInitializing: false 
       });
       
       toast({
         title: "Initialization Failed",
-        description: err.message || "Twilio initialization failed. Please check your configuration.",
+        description: toastDescription,
         variant: "destructive",
       });
     }
@@ -342,18 +408,18 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       console.error('❌ Call error:', error);
       
       // Handle all call errors
-      set({ 
-        activeCall: null,
-        isConnecting: false,
-        callDuration: 0,
-        error: error.message || 'Call error occurred' 
-      });
+        set({ 
+          activeCall: null,
+          isConnecting: false,
+          callDuration: 0,
+          error: error.message || 'Call error occurred' 
+        });
       
-      toast({
-        title: "Call Error",
-        description: error.message || 'An error occurred during the call',
-        variant: "destructive",
-      });
+        toast({
+          title: "Call Error",
+          description: error.message || 'An error occurred during the call',
+          variant: "destructive",
+        });
     });
 
     call.on('mute', (isMuted) => {
