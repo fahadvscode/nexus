@@ -375,8 +375,8 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
         cleanNumber = '+1' + cleanNumber;
       }
 
-      // Check if we have a real Twilio device or are in demo mode
-      if (device && !error?.includes('Demo Mode')) {
+      // Check if we have a real Twilio device
+      if (device) {
         // Real Twilio call
         try {
           console.log('🔄 Attempting real Twilio call...');
