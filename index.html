@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>client-shield-crm</title>
+    <meta name="description" content="Lovable Generated Project" />
+    <meta name="author" content="Lovable" />
+
+    <meta property="og:title" content="client-shield-crm" />
+    <meta property="og:description" content="Lovable Generated Project" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Suppress browser extension console noise -->
+    <script>
+      // Filter out browser extension errors that aren't related to our application
+      const originalError = console.error;
+      console.error = function(...args) {
+        const message = args.join(' ');
+        
+        // Skip browser extension related errors
+        if (message.includes('extensionState.js') || 
+            message.includes('heuristicsRedefinitions.js') ||
+            message.includes('utils.js') ||
+            message.includes('background.js') ||
+            message.includes('Extension manifest must request permission') ||
+            message.includes('Failed to load resource: net::ERR_FILE_NOT_FOUND')) {
+          return; // Don't log these errors
+        }
+        
+        // Log all other errors normally
+        originalError.apply(console, args);
+      };
+    </script>
+  </body>
+</html>

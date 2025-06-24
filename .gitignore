@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Sensitive credentials - never commit
+TWILIO_CREDENTIALS.md
+.env
+.env.local
+.env.production
+.vercel
+
+# Sensitive configuration files
+/supabase/functions/import_map.json
+/supabase/functions/deno.json
+.env.cloud
+BACKUP_CURRENT_CONFIG.md
+CLOUD_DEPLOYMENT_COMPLETE.md
+CRM_SETUP_GUIDE.md
+PERMANENT_DEPLOYMENT_GUIDE.md
