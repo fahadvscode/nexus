@@ -303,16 +303,27 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                 </div>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-              <Button size="sm">
-                <Phone className="h-4 w-4 mr-2" />
-                Call
-              </Button>
-            </div>
+                         <div className="flex items-center space-x-2">
+               {isAdmin && (
+                 <Button variant="outline" size="sm">
+                   <Edit className="h-4 w-4 mr-2" />
+                   Edit
+                 </Button>
+               )}
+               <Button 
+                 size="sm"
+                 onClick={() => {
+                   // In a real app, this would integrate with the calling system
+                   toast({
+                     title: "Initiating Call",
+                     description: `Calling ${shouldBlurInfo ? maskPhoneNumber(client.phone) : client.phone}...`,
+                   });
+                 }}
+               >
+                 <Phone className="h-4 w-4 mr-2" />
+                 Call
+               </Button>
+             </div>
           </div>
         </DialogHeader>
 
@@ -581,26 +592,20 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                                </span>
                              </div>
                                                          <Textarea
-                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Type your message..."}
+                               placeholder="Type your message..."
                                value={smsMessage}
                                onChange={(e) => setSmsMessage(e.target.value)}
                                rows={3}
-                               disabled={shouldBlurInfo}
                              />
                                                          <Button 
                                onClick={handleSendSMS} 
-                               disabled={!smsMessage.trim() || shouldBlurInfo}
+                               disabled={!smsMessage.trim()}
                                size="sm"
                                className="w-full"
                              >
                                <Send className="h-4 w-4 mr-2" />
                                Send SMS
                              </Button>
-                             {shouldBlurInfo && (
-                               <p className="text-xs text-gray-500 mt-1">
-                                 Contact access restricted for subaccounts
-                               </p>
-                             )}
                           </CardContent>
                         </Card>
 
@@ -619,32 +624,25 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                                </span>
                              </div>
                                                          <Input
-                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Subject"}
+                               placeholder="Subject"
                                value={emailSubject}
                                onChange={(e) => setEmailSubject(e.target.value)}
-                               disabled={shouldBlurInfo}
                              />
                              <Textarea
-                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Email message..."}
+                               placeholder="Email message..."
                                value={emailMessage}
                                onChange={(e) => setEmailMessage(e.target.value)}
                                rows={2}
-                               disabled={shouldBlurInfo}
                              />
                                                          <Button 
                                onClick={handleSendEmail} 
-                               disabled={!emailMessage.trim() || !client.email || shouldBlurInfo}
+                               disabled={!emailMessage.trim() || !client.email}
                                size="sm"
                                className="w-full"
                              >
                                <Send className="h-4 w-4 mr-2" />
                                Send Email
                              </Button>
-                             {shouldBlurInfo && (
-                               <p className="text-xs text-gray-500 mt-1">
-                                 Contact access restricted for subaccounts
-                               </p>
-                             )}
                           </CardContent>
                         </Card>
                       </div>
