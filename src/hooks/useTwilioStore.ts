@@ -115,14 +115,16 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
       if (error) {
         console.error('❌ Token fetch error:', error);
-        console.error('❌ Function response data:', data);
+        console.error('❌ Function error context:', error.context);
         
         // Try to get more specific error message from the response
         let errorMessage = error.message || 'Unknown error';
-        if (data?.error) {
+        if (error.context?.error) {
+          errorMessage = error.context.error;
+        } else if (data?.error) { // Fallback
           errorMessage = data.error;
-          console.error('❌ Specific error from function:', errorMessage);
         }
+        console.error('❌ Specific error from function:', errorMessage);
         
         throw new Error(`Failed to get token: ${errorMessage}`);
       }
@@ -495,8 +497,6 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       });
     }
   },
-
-
 
   hangupCall: () => {
     const { activeCall } = get();
