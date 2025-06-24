@@ -18,9 +18,9 @@ serve(async (req) => {
     // Get the Twilio phone number from environment variables
     let twilioPhoneNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
     
-    // Fallback to hardcoded value for local development
+    // Fallback to your purchased phone number for local development
     if (!twilioPhoneNumber) {
-      twilioPhoneNumber = "+12892128389"; // From .env file
+      twilioPhoneNumber = "+12893018284"; // Your purchased number: (289) 301-8284
       console.log('🔄 Using fallback phone number:', twilioPhoneNumber);
     }
 
