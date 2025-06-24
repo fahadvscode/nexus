@@ -41,6 +41,7 @@ import { Client } from "@/types/client";
 import { CallLog } from "@/types/call";
 import { callStore } from "@/store/callStore";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/UserRoleProvider";
 import { format } from "date-fns";
 
 interface DetailedLeadViewProps {
@@ -71,6 +72,10 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("contact");
   const { toast } = useToast();
+  const { userRole, blurEnabled } = useUserRole();
+
+  const isAdmin = userRole === "admin";
+  const shouldBlurInfo = !isAdmin && blurEnabled;
 
   useEffect(() => {
     if (client && open) {
@@ -243,9 +248,33 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const maskPhoneNumber = (phone: string) => {
+    if (phone.length <= 4) return phone;
+    return phone.slice(0, 3) + "***" + phone.slice(-2);
+  };
+
+  const maskEmail = (email: string) => {
+    if (!email) return email;
+    const [localPart, domain] = email.split('@');
+    if (localPart.length <= 2) return email;
+    return localPart.slice(0, 2) + "***" + localPart.slice(-1) + "@" + domain;
+  };
+
   if (!client) return null;
 
   return (
+    <>
+      <style>{`
+        .contact-detail.blurred {
+          filter: blur(4px);
+          background-color: #f3f4f6;
+          padding: 2px 8px;
+          border-radius: 4px;
+          user-select: none;
+          pointer-events: none;
+        }
+      `}</style>
+      
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[95vh] p-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b">
@@ -324,14 +353,18 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                               <label className="text-sm font-medium text-gray-500">Email</label>
                               <div className="flex items-center space-x-2">
                                 <Mail className="h-4 w-4 text-gray-400" />
-                                <p className="text-base">{client.email || 'Not provided'}</p>
+                                <p className={`text-base contact-detail ${shouldBlurInfo ? 'blurred' : ''}`}>
+                                  {shouldBlurInfo ? maskEmail(client.email || 'Not provided') : (client.email || 'Not provided')}
+                                </p>
                               </div>
                             </div>
                             <div>
                               <label className="text-sm font-medium text-gray-500">Phone</label>
                               <div className="flex items-center space-x-2">
                                 <Phone className="h-4 w-4 text-gray-400" />
-                                <p className="text-base">{client.phone}</p>
+                                <p className={`text-base contact-detail ${shouldBlurInfo ? 'blurred' : ''}`}>
+                                  {shouldBlurInfo ? maskPhoneNumber(client.phone) : client.phone}
+                                </p>
                               </div>
                             </div>
                             <div>
@@ -540,26 +573,34 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                               <span>Send SMS</span>
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="flex items-center space-x-2 text-sm text-gray-600">
-                              <span>To:</span>
-                              <span className="font-medium">{client.phone}</span>
-                            </div>
-                            <Textarea
-                              placeholder="Type your message..."
-                              value={smsMessage}
-                              onChange={(e) => setSmsMessage(e.target.value)}
-                              rows={3}
-                            />
-                            <Button 
-                              onClick={handleSendSMS} 
-                              disabled={!smsMessage.trim()}
-                              size="sm"
-                              className="w-full"
-                            >
-                              <Send className="h-4 w-4 mr-2" />
-                              Send SMS
-                            </Button>
+                                                     <CardContent className="space-y-3">
+                             <div className="flex items-center space-x-2 text-sm text-gray-600">
+                               <span>To:</span>
+                               <span className={`font-medium contact-detail ${shouldBlurInfo ? 'blurred' : ''}`}>
+                                 {shouldBlurInfo ? maskPhoneNumber(client.phone) : client.phone}
+                               </span>
+                             </div>
+                                                         <Textarea
+                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Type your message..."}
+                               value={smsMessage}
+                               onChange={(e) => setSmsMessage(e.target.value)}
+                               rows={3}
+                               disabled={shouldBlurInfo}
+                             />
+                                                         <Button 
+                               onClick={handleSendSMS} 
+                               disabled={!smsMessage.trim() || shouldBlurInfo}
+                               size="sm"
+                               className="w-full"
+                             >
+                               <Send className="h-4 w-4 mr-2" />
+                               Send SMS
+                             </Button>
+                             {shouldBlurInfo && (
+                               <p className="text-xs text-gray-500 mt-1">
+                                 Contact access restricted for subaccounts
+                               </p>
+                             )}
                           </CardContent>
                         </Card>
 
@@ -570,31 +611,40 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
                               <span>Send Email</span>
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div className="flex items-center space-x-2 text-sm text-gray-600">
-                              <span>To:</span>
-                              <span className="font-medium">{client.email || 'No email provided'}</span>
-                            </div>
-                            <Input
-                              placeholder="Subject"
-                              value={emailSubject}
-                              onChange={(e) => setEmailSubject(e.target.value)}
-                            />
-                            <Textarea
-                              placeholder="Email message..."
-                              value={emailMessage}
-                              onChange={(e) => setEmailMessage(e.target.value)}
-                              rows={2}
-                            />
-                            <Button 
-                              onClick={handleSendEmail} 
-                              disabled={!emailMessage.trim() || !client.email}
-                              size="sm"
-                              className="w-full"
-                            >
-                              <Send className="h-4 w-4 mr-2" />
-                              Send Email
-                            </Button>
+                                                     <CardContent className="space-y-3">
+                             <div className="flex items-center space-x-2 text-sm text-gray-600">
+                               <span>To:</span>
+                               <span className={`font-medium contact-detail ${shouldBlurInfo ? 'blurred' : ''}`}>
+                                 {shouldBlurInfo ? maskEmail(client.email || 'No email provided') : (client.email || 'No email provided')}
+                               </span>
+                             </div>
+                                                         <Input
+                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Subject"}
+                               value={emailSubject}
+                               onChange={(e) => setEmailSubject(e.target.value)}
+                               disabled={shouldBlurInfo}
+                             />
+                             <Textarea
+                               placeholder={shouldBlurInfo ? "Contact access restricted" : "Email message..."}
+                               value={emailMessage}
+                               onChange={(e) => setEmailMessage(e.target.value)}
+                               rows={2}
+                               disabled={shouldBlurInfo}
+                             />
+                                                         <Button 
+                               onClick={handleSendEmail} 
+                               disabled={!emailMessage.trim() || !client.email || shouldBlurInfo}
+                               size="sm"
+                               className="w-full"
+                             >
+                               <Send className="h-4 w-4 mr-2" />
+                               Send Email
+                             </Button>
+                             {shouldBlurInfo && (
+                               <p className="text-xs text-gray-500 mt-1">
+                                 Contact access restricted for subaccounts
+                               </p>
+                             )}
                           </CardContent>
                         </Card>
                       </div>
@@ -683,5 +733,6 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }; 
