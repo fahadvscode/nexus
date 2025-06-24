@@ -39,7 +39,6 @@ interface TwilioStore {
   destroyDevice: () => void;
   setupCallEventHandlers: (call: Call) => void;
   handleIncomingCall: (call: Call) => void;
-  simulateDemoCall: (cleanNumber: string, clientName?: string, originalNumber?: string) => Promise<void>;
 }
 
 export const useTwilioStore = create<TwilioStore>((set, get) => ({
@@ -170,16 +169,16 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
 
       // Set a timeout for device registration
       const registrationTimeout = setTimeout(() => {
-        console.log('⏰ Device registration timeout, falling back to demo mode');
+        console.error('⏰ Device registration timeout');
         set({ 
-          error: 'Demo Mode: Device registration timeout - using simulated calls',
-          isReady: true,
+          error: 'Device registration timeout. Please check your Twilio configuration.',
+          isReady: false,
           isInitializing: false 
         });
         toast({
-          title: "Demo Mode Active",
-          description: "Device registration timeout. Using demo mode for reliable calling.",
-          variant: "default",
+          title: "Registration Failed",
+          description: "Device registration timeout. Please check your Twilio configuration.",
+          variant: "destructive",
         });
       }, 10000);
 
@@ -202,14 +201,14 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
         clearTimeout(registrationTimeout);
         console.error('❌ Device error:', error);
         set({ 
-          error: 'Demo Mode: Device error - using simulated calls',
-          isReady: true,
+          error: `Device error: ${error.message || error}`,
+          isReady: false,
           isInitializing: false 
         });
         toast({
-          title: "Demo Mode Active",
-          description: "Device error occurred. Using demo mode as fallback.",
-          variant: "default",
+          title: "Device Error",
+          description: "Twilio device error occurred. Please check your configuration.",
+          variant: "destructive",
         });
       });
 
@@ -223,18 +222,17 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
     } catch (err: any) {
       console.error('❌ Failed to initialize Twilio device:', err);
-      console.log('🔄 Falling back to demo mode...');
       
       set({ 
-        error: 'Demo Mode: Initialization failed - using simulated calls',
-        isReady: true,
+        error: `Initialization failed: ${err.message || err}`,
+        isReady: false,
         isInitializing: false 
       });
       
       toast({
-        title: "Demo Mode Active",
-        description: "Twilio initialization failed. Using demo mode for reliable calling.",
-        variant: "default",
+        title: "Initialization Failed",
+        description: "Twilio initialization failed. Please check your configuration.",
+        variant: "destructive",
       });
     }
   },
@@ -302,43 +300,19 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     call.on('error', (error) => {
       console.error('❌ Call error:', error);
       
-      // Check if this is a webhook connection error (31005)
-      if (error.code === 31005 || error.message?.includes('31005')) {
-        console.log('🔄 Webhook connection failed, switching to demo mode for future calls');
-        set({ 
-          activeCall: null,
-          isConnecting: false,
-          callDuration: 0,
-          error: 'Demo Mode: Webhook connection failed - using simulated calls' 
-        });
-        
-        toast({
-          title: "Switched to Demo Mode",
-          description: "Webhook connection failed. Using demo mode for reliable calling.",
-          variant: "default",
-        });
-        
-        // Start a demo call immediately for this failed call
-        const phoneNumber = error.parameters?.To || '+1234567890';
-        const clientName = error.parameters?.ClientName || 'Unknown Client';
-        setTimeout(() => {
-          get().simulateDemoCall(phoneNumber, clientName, phoneNumber);
-        }, 1000);
-        
-      } else {
-        // Handle other call errors normally
-        set({ 
-          activeCall: null,
-          isConnecting: false,
-          callDuration: 0,
-          error: error.message || 'Call error occurred' 
-        });
-        toast({
-          title: "Call Error",
-          description: error.message || 'An error occurred during the call',
-          variant: "destructive",
-        });
-      }
+      // Handle all call errors
+      set({ 
+        activeCall: null,
+        isConnecting: false,
+        callDuration: 0,
+        error: error.message || 'Call error occurred' 
+      });
+      
+      toast({
+        title: "Call Error",
+        description: error.message || 'An error occurred during the call',
+        variant: "destructive",
+      });
     });
 
     call.on('mute', (isMuted) => {
@@ -436,24 +410,18 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
           get().setupCallEventHandlers(call);
 
           toast({
-            title: "Real Call Initiated",
-            description: `Making real Twilio call to ${clientName || phoneNumber}`,
+            title: "Call Initiated",
+            description: `Making Twilio call to ${clientName || phoneNumber}`,
           });
 
           console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
         } catch (twilioError: any) {
-          console.log('⚠️ Real Twilio call failed, falling back to demo mode:', twilioError.message);
-          toast({
-            title: "Fallback to Demo Mode",
-            description: "Real call failed, using demo mode for this call",
-            variant: "default",
-          });
-          await get().simulateDemoCall(cleanNumber, clientName, phoneNumber);
+          console.error('❌ Real Twilio call failed:', twilioError.message);
+          throw new Error(`Call failed: ${twilioError.message}`);
         }
       } else {
-        // Demo mode
-        console.log('🎭 Using demo mode for call simulation');
-        await get().simulateDemoCall(cleanNumber, clientName, phoneNumber);
+        // No device available - throw error instead of demo mode
+        throw new Error('Twilio device not available. Please wait for initialization or check configuration.');
       }
       
     } catch (err: any) {
@@ -471,64 +439,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     }
   },
 
-  simulateDemoCall: async (cleanNumber: string, clientName?: string, originalNumber?: string) => {
-    console.log('📞 Demo mode: Simulating call...', { cleanNumber, clientName, originalNumber });
-    
-    const mockCall = {
-      parameters: {
-        CallSid: 'demo-call-' + Date.now(),
-        To: cleanNumber,
-        From: '+1234567890'
-      },
-      disconnect: () => {
-        console.log('📞 Demo call ended');
-        if ((mockCall as any).durationInterval) {
-          clearInterval((mockCall as any).durationInterval);
-        }
-        set({ 
-          activeCall: null,
-          isConnecting: false,
-          callDuration: 0,
-          isMuted: false 
-        });
-        toast({
-          title: "Demo Call Ended",
-          description: "Demo call has been disconnected",
-        });
-      },
-      mute: (muted: boolean) => {
-        set({ isMuted: muted });
-        console.log(`🔇 Demo call ${muted ? 'muted' : 'unmuted'}`);
-      },
-      on: () => {},
-    } as any;
 
-    toast({
-      title: "Demo Call Initiated",
-      description: `Demo call to ${clientName || originalNumber}...`,
-    });
-
-    setTimeout(() => {
-      set({ 
-        isConnecting: false,
-        activeCall: mockCall 
-      });
-      
-      const startTime = Date.now();
-      const durationInterval = setInterval(() => {
-        const currentTime = Date.now();
-        const duration = Math.floor((currentTime - startTime) / 1000);
-        set({ callDuration: duration });
-      }, 1000);
-      
-      (mockCall as any).durationInterval = durationInterval;
-      
-      toast({
-        title: "Demo Call Connected",
-        description: `Demo call connected to ${clientName || originalNumber}`,
-      });
-    }, 2000);
-  },
 
   hangupCall: () => {
     const { activeCall } = get();
