@@ -3,6 +3,8 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
+// FORCE FRESH DEPLOYMENT v5 - JWT WITH NBF FIELD - June 24, 2025
+
 export interface CallOptions {
   phoneNumber: string;
   clientName?: string;
@@ -89,10 +91,13 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       }
 
       console.log('🔄 Fetching Twilio token...');
+      console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v4 - NBF FIELD INCLUDED');
       
       const { data, error } = await supabase.functions.invoke('get-twilio-token', {
         headers: {
           Authorization: `Bearer ${activeSession.access_token}`,
+          'Cache-Control': 'no-cache',
+          'x-application-name': 'nexus-crm',
         },
       });
       
@@ -111,6 +116,22 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       }
       
       console.log('✅ Twilio token received');
+      
+      // DEBUG: Decode and log the actual token structure
+      try {
+        const parts = data.token.split('.');
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        console.log('🔍 ACTUAL JWT PAYLOAD:', JSON.stringify(payload, null, 2));
+        
+        if (payload.nbf) {
+          console.log('✅ nbf field is present in actual token');
+        } else {
+          console.log('❌ nbf field is MISSING in actual token');
+        }
+      } catch (e) {
+        console.error('❌ Failed to decode token for debugging:', e);
+      }
+      
       return data.token;
     } catch (err: any) {
       console.error('❌ Error fetching Twilio token:', err);
@@ -458,8 +479,6 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       });
     }
   },
-
-
 
   hangupCall: () => {
     const { activeCall } = get();
