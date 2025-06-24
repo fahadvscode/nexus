@@ -9,7 +9,7 @@ import { UserRoleProvider } from "./components/UserRoleProvider";
 import Calendar from "./pages/Calendar";
 import CallHistory from "./pages/CallHistory";
 import Settings from "./pages/Settings";
-import { DebugInfo } from "./components/DebugInfo";
+import DebugInfo from "./components/DebugInfo";
 
 const queryClient = new QueryClient();
 
