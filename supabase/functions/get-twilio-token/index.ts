@@ -23,10 +23,16 @@ serve(async (req) => {
     if (!user) throw new Error('User not found')
 
     // Get Twilio credentials from environment variables
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')!
-    const apiKeySid = Deno.env.get('TWILIO_API_KEY_SID')!
-    const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET')!
-    const twimlAppSid = Deno.env.get('TWIML_APP_SID')!
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
+    const apiKeySid = Deno.env.get('TWILIO_API_KEY_SID')
+    const apiKeySecret = Deno.env.get('TWILIO_API_KEY_SECRET')
+    const twimlAppSid = Deno.env.get('TWIML_APP_SID')
+    
+    // Check for missing credentials
+    if (!accountSid) throw new Error('TWILIO_ACCOUNT_SID not found')
+    if (!apiKeySid) throw new Error('TWILIO_API_KEY_SID not found')
+    if (!apiKeySecret) throw new Error('TWILIO_API_KEY_SECRET not found')
+    if (!twimlAppSid) throw new Error('TWIML_APP_SID not found')
     
     // Manually construct the JWT for Twilio
     const identity = user.email!
