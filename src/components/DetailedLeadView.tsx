@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -258,6 +258,9 @@ export const DetailedLeadView = ({ open, onOpenChange, client }: DetailedLeadVie
               </Avatar>
               <div>
                 <DialogTitle className="text-2xl">{client.name}</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Detailed view for {client.name} - Contact information, activity history, and communication tools
+                </DialogDescription>
                 <div className="flex items-center space-x-2 mt-1">
                   <Badge className={`${
                     client.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
