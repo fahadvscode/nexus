@@ -15,12 +15,15 @@ serve(async (req) => {
     
     // Check for authorization header
     const authHeader = req.headers.get('Authorization')
+    console.log('🔍 All request headers:', Object.fromEntries(req.headers.entries()))
+    
     if (!authHeader) {
       console.error('❌ No Authorization header found')
       throw new Error('Authorization header required')
     }
     
     console.log('✅ Authorization header found')
+    console.log('🔍 Auth header length:', authHeader.length)
 
     // Create a Supabase client with the user's auth token
     const supabaseClient = createClient(
@@ -109,8 +112,13 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   } catch (error) {
-    console.error('❌ Twilio token generation failed:', error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('❌ Twilio token generation failed:', error)
+    console.error('❌ Error stack:', error.stack)
+    
+    const errorMessage = error.message || 'Unknown error occurred'
+    console.error('❌ Returning error response:', errorMessage)
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

@@ -107,11 +107,28 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
       console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
       
-      const { data, error } = await supabase.functions.invoke('get-twilio-token', {
+      // Try direct fetch instead of supabase.functions.invoke
+      console.log('🔄 Making direct fetch request...');
+      const response = await fetch('https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token', {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${activeSession.access_token}`,
+          'Authorization': `Bearer ${activeSession.access_token}`,
+          'Content-Type': 'application/json',
+          'x-application-name': 'client-shield-crm'
         },
       });
+      
+      console.log('🔄 Response status:', response.status);
+      console.log('🔄 Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Direct fetch error response:', errorText);
+        throw new Error(`Failed to get token: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      const error = null; // No error if we got here
       
       if (error) {
         console.error('❌ Token fetch error:', error);
