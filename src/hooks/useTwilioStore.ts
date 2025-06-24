@@ -92,8 +92,20 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
         throw new Error('No active session found');
       }
 
+      // Check if session is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (activeSession.expires_at && activeSession.expires_at < now) {
+        console.error('❌ Session is expired:', {
+          expiresAt: new Date(activeSession.expires_at * 1000).toISOString(),
+          now: new Date(now * 1000).toISOString()
+        });
+        throw new Error('Session has expired. Please refresh the page and log in again.');
+      }
+
       console.log('🔄 Fetching Twilio token...');
       console.log('🔐 Using session for user:', activeSession.user?.email);
+      console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
+      console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
       
       const { data, error } = await supabase.functions.invoke('get-twilio-token', {
         headers: {
@@ -103,11 +115,15 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       
       if (error) {
         console.error('❌ Token fetch error:', error);
+        console.error('❌ Function response data:', data);
+        
         // Try to get more specific error message from the response
         let errorMessage = error.message || 'Unknown error';
         if (data?.error) {
           errorMessage = data.error;
+          console.error('❌ Specific error from function:', errorMessage);
         }
+        
         throw new Error(`Failed to get token: ${errorMessage}`);
       }
       

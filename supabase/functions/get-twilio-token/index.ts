@@ -31,10 +31,13 @@ serve(async (req) => {
 
     // Get the user from the auth token
     console.log('🔍 Validating user session...')
+    console.log('🔍 Auth header:', authHeader.substring(0, 20) + '...')
+    
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     
     if (userError) {
       console.error('❌ User validation error:', userError)
+      console.error('❌ Error details:', JSON.stringify(userError, null, 2))
       throw new Error(`User validation failed: ${userError.message}`)
     }
     
@@ -44,6 +47,7 @@ serve(async (req) => {
     }
     
     console.log('✅ User validated:', user.email)
+    console.log('✅ User ID:', user.id)
 
     // Get Twilio credentials from environment variables
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
