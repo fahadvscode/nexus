@@ -116,14 +116,15 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       }
 
       console.log('🔄 Fetching Twilio token...');
-      console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v4 - NBF FIELD INCLUDED');
+      console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v5 - NBF FIELD INCLUDED');
       console.log('🔐 Using session for user:', activeSession.user?.email);
       console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
       console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
       
       // Try direct fetch instead of supabase.functions.invoke
       console.log('🔄 Making direct fetch request...');
-      const response = await fetch('https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token', {
+      const timestamp = Date.now();
+      const response = await fetch(`https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token?t=${timestamp}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${activeSession.access_token}`,

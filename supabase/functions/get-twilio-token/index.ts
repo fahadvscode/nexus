@@ -1,5 +1,5 @@
 // supabase/functions/get-twilio-token/index.ts
-// FORCE DEPLOYMENT v4 - JWT WITH NBF FIELD - June 24, 2025
+// FORCE DEPLOYMENT v5 - JWT WITH NBF FIELD CRITICAL FIX - June 24, 2025
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
@@ -132,6 +132,8 @@ serve(async (req) => {
 
     console.log('🔍 JWT Header:', JSON.stringify(header))
     console.log('🔧 JWT Payload:', JSON.stringify(payload, null, 2))
+    console.log('🔧 DEPLOYMENT VERSION: v5 - NBF FIELD INCLUDED - June 24, 2025')
+    console.log('🔧 NBF field value:', payload.nbf)
 
     const headerB64 = base64Encode(new TextEncoder().encode(JSON.stringify(header))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
     const payloadB64 = base64Encode(new TextEncoder().encode(JSON.stringify(payload))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
