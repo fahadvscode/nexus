@@ -128,7 +128,6 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
         headers: {
           'Authorization': `Bearer ${activeSession.access_token}`,
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache',
           'x-application-name': 'nexus-crm',
         },
       });
