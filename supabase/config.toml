@@ -14,6 +14,9 @@ verify_jwt = false
 [functions.handle-voice]
 verify_jwt = false
 
+[functions.send-sms]
+verify_jwt = true
+
 [functions.make-call]
 verify_jwt = true
 

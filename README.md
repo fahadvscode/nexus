@@ -1,5 +1,19 @@
 # Welcome to your Lovable project
 
+## 📞 TWILIO VOICE INTEGRATION
+
+**For complete Twilio Voice setup, see:** [`TWILIO_COMPLETE_SETUP_GUIDE.md`](./TWILIO_COMPLETE_SETUP_GUIDE.md)
+
+This CRM includes fully working Twilio Voice integration with:
+- ✅ Real phone calling capabilities
+- ✅ API Key authentication (secure)
+- ✅ Production deployment ready
+- ✅ Complete troubleshooting guide
+
+**Quick Access**: https://client-shield-crm-main.vercel.app
+
+---
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/d6882cb1-acff-4ac2-94be-377a04d98d36

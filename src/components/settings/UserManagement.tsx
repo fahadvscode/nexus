@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from '@/components/ui/switch';
 import { useUserManagement } from '@/hooks/useUserManagement';
 import { useUserRole } from '@/components/UserRoleProvider';
-import { Trash2, Plus, Users, Building, Eye, EyeOff, UserCheck, UserX } from 'lucide-react';
+import { useAdminImpersonation } from '@/hooks/useAdminImpersonation';
+import { Trash2, Plus, Users, Building, Eye, EyeOff, UserCheck, UserX, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 const UserManagement = () => {
-  const { isAdmin } = useUserRole();
+  const { isAdmin, userProfile } = useUserRole();
   const { 
     allOrganizations, 
     allProfiles, 
@@ -24,6 +26,9 @@ const UserManagement = () => {
     toggleUserStatus, 
     deleteSubaccount 
   } = useUserManagement();
+  
+  const impersonation = useAdminImpersonation(userProfile, isAdmin());
+  const navigate = useNavigate();
   
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -79,6 +84,14 @@ const UserManagement = () => {
 
   const handleDeleteSubaccount = async (userId: string) => {
     await deleteSubaccount(userId);
+  };
+
+  const handleSwitchToSubAccount = async (userId: string) => {
+    const success = await impersonation.switchToSubAccount(userId);
+    if (success) {
+      // Navigate to the main dashboard where the user will see the sub-account's data
+      navigate('/');
+    }
   };
 
   const getOrganizationForUser = (userId: string) => {
@@ -270,6 +283,16 @@ const UserManagement = () => {
                       </div>
                       
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleSwitchToSubAccount(profile.user_id)}
+                          disabled={!profile.is_active}
+                        >
+                          <ArrowRight className="h-4 w-4 mr-1" />
+                          Switch to Sub Account
+                        </Button>
+                        
                         <Button
                           variant="outline"
                           size="sm"

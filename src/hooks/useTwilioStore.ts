@@ -3,7 +3,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
-// FORCE FRESH DEPLOYMENT v5 - JWT WITH NBF FIELD - June 24, 2025
+// FORCE FRESH DEPLOYMENT v6 - JWT WITH API KEY AUTH - June 25, 2025
 
 export interface CallOptions {
   phoneNumber: string;
@@ -116,7 +116,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       }
 
       console.log('🔄 Fetching Twilio token...');
-      console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v5 - NBF FIELD INCLUDED');
+      console.log('🔧 DEBUG: Force fresh deployment with API KEY AUTH - June 25, 2025 v6');
       console.log('🔐 Using session for user:', activeSession.user?.email);
       console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
       console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
@@ -124,12 +124,15 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       // Try direct fetch instead of supabase.functions.invoke
       console.log('🔄 Making direct fetch request...');
       const timestamp = Date.now();
-      const response = await fetch(`https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token?t=${timestamp}`, {
+      const cacheBuster = `t=${timestamp}&v=6`;
+      const response = await fetch(`https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token?${cacheBuster}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${activeSession.access_token}`,
           'Content-Type': 'application/json',
           'x-application-name': 'nexus-crm',
+          'cache-control': 'no-cache, no-store',
+          'x-deploy-version': 'v6-api-key-auth',
         },
       });
       

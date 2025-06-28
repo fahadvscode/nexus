@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import LoginPage from "@/pages/Login";
 import { useUserManagement, UserProfile, UserRole } from "@/hooks/useUserManagement";
+import { useAdminImpersonation } from "@/hooks/useAdminImpersonation";
 
 interface UserRoleContextType {
   session: Session | null;
@@ -15,6 +16,12 @@ interface UserRoleContextType {
   getCurrentOrganizationId: () => string | null;
   refreshUserData: () => void;
   forceLogout: () => void;
+  // Impersonation
+  isImpersonating: boolean;
+  impersonatedProfile: UserProfile | null;
+  switchToSubAccount: (userId: string) => Promise<boolean>;
+  exitImpersonation: () => void;
+  getActiveProfile: () => UserProfile | null;
 }
 
 const UserRoleContext = createContext<UserRoleContextType | undefined>(undefined);
@@ -44,6 +51,9 @@ export const UserRoleProvider = ({ children }: Props) => {
     getCurrentOrganizationId,
     refreshData 
   } = useUserManagement();
+  
+  // Initialize impersonation hook
+  const impersonation = useAdminImpersonation(userProfile, checkIsAdmin());
 
   // Force logout function
   const forceLogout = async () => {
@@ -166,9 +176,15 @@ export const UserRoleProvider = ({ children }: Props) => {
     setBlurEnabled,
     toggleBlur,
     isAdmin: isAdminCheck,
-    getCurrentOrganizationId,
+    getCurrentOrganizationId: impersonation.isImpersonating ? impersonation.getActiveOrganizationId : getCurrentOrganizationId,
     refreshUserData: refreshData,
     forceLogout,
+    // Impersonation
+    isImpersonating: impersonation.isImpersonating,
+    impersonatedProfile: impersonation.impersonatedProfile,
+    switchToSubAccount: impersonation.switchToSubAccount,
+    exitImpersonation: impersonation.exitImpersonation,
+    getActiveProfile: () => impersonation.getActiveProfile(userProfile),
   };
 
   if (loading) {

@@ -18,8 +18,8 @@ import { EmailSettings } from "@/components/settings/EmailSettings";
 import { CalendarSettings } from "@/components/settings/CalendarSettings";
 import BulkLeadAssignment from "@/components/settings/BulkLeadAssignment";
 import SubaccountResources from "@/components/settings/SubaccountResources";
-import { DebugUserRole } from "@/components/DebugUserRole";
-import { TestAdminFunctions } from "@/components/TestAdminFunctions";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
+
 
 const Settings = () => {
   const { userRole, isAdmin } = useUserRole();
@@ -58,6 +58,7 @@ const Settings = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <ImpersonationBanner />
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full grid-cols-10">
             <TabsTrigger value="users" className="flex items-center space-x-2">
@@ -103,10 +104,6 @@ const Settings = () => {
           </TabsList>
 
           <TabsContent value="users">
-            <DebugUserRole />
-            <div className="mb-6">
-              <TestAdminFunctions />
-            </div>
             <UserManagement />
           </TabsContent>
 

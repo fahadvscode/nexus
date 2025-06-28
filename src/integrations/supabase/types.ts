@@ -52,6 +52,7 @@ export interface Database {
           twilio_call_sid: string | null
           twilio_status: string | null
           organization_id: string | null
+          has_recording: boolean | null
           created_at: string
           updated_at: string
         }
@@ -72,6 +73,7 @@ export interface Database {
           twilio_call_sid?: string | null
           twilio_status?: string | null
           organization_id?: string | null
+          has_recording?: boolean | null
           created_at?: string
           updated_at?: string
         }
@@ -92,6 +94,7 @@ export interface Database {
           twilio_call_sid?: string | null
           twilio_status?: string | null
           organization_id?: string | null
+          has_recording?: boolean | null
           created_at?: string
           updated_at?: string
         }
@@ -101,6 +104,69 @@ export interface Database {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      call_recordings: {
+        Row: {
+          id: string
+          recording_sid: string
+          call_sid: string
+          call_log_id: string | null
+          client_id: string | null
+          recording_url: string
+          duration_seconds: number | null
+          status: string | null
+          channels: number | null
+          source: string | null
+          file_size: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          recording_sid: string
+          call_sid: string
+          call_log_id?: string | null
+          client_id?: string | null
+          recording_url: string
+          duration_seconds?: number | null
+          status?: string | null
+          channels?: number | null
+          source?: string | null
+          file_size?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          recording_sid?: string
+          call_sid?: string
+          call_log_id?: string | null
+          client_id?: string | null
+          recording_url?: string
+          duration_seconds?: number | null
+          status?: string | null
+          channels?: number | null
+          source?: string | null
+          file_size?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_recordings_call_log_id_fkey"
+            columns: ["call_log_id"]
+            isOneToOne: false
+            referencedRelation: "call_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           }
         ]
@@ -118,6 +184,7 @@ export interface Database {
           source: string | null
           last_contact: string | null
           organization_id: string | null
+          notes: string | null
           created_at: string
         }
         Insert: {
@@ -132,6 +199,7 @@ export interface Database {
           source?: string | null
           last_contact?: string | null
           organization_id?: string | null
+          notes?: string | null
           created_at?: string
         }
         Update: {
@@ -146,6 +214,7 @@ export interface Database {
           source?: string | null
           last_contact?: string | null
           organization_id?: string | null
+          notes?: string | null
           created_at?: string
         }
         Relationships: [
@@ -159,6 +228,63 @@ export interface Database {
           {
             foreignKeyName: "clients_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      communication_history: {
+        Row: {
+          id: string
+          client_id: string | null
+          type: string
+          direction: string | null
+          subject: string | null
+          content: string | null
+          status: string | null
+          metadata: Json | null
+          created_by: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          client_id?: string | null
+          type: string
+          direction?: string | null
+          subject?: string | null
+          content?: string | null
+          status?: string | null
+          metadata?: Json | null
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string | null
+          type?: string
+          direction?: string | null
+          subject?: string | null
+          content?: string | null
+          status?: string | null
+          metadata?: Json | null
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_history_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communication_history_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

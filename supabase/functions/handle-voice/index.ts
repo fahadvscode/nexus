@@ -1,87 +1,67 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from '../_shared/cors.ts'
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    console.log('🔄 Handle Voice request received');
+    console.log('🎵 Processing TwiML voice request...')
     
-    // Get the Twilio phone number from environment variables
-    let twilioPhoneNumber = Deno.env.get("TWILIO_PHONE_NUMBER");
+    // Parse the webhook data from Twilio
+    const body = await req.text()
+    const params = new URLSearchParams(body)
     
-    // Fallback to your purchased phone number for local development
-    if (!twilioPhoneNumber) {
-      twilioPhoneNumber = "***REMOVED***"; // Your purchased number: (289) 301-8284
-      console.log('🔄 Using fallback phone number:', twilioPhoneNumber);
-    }
+    const callSid = params.get('CallSid')
+    const from = params.get('From')
+    const to = params.get('To')
+    const callStatus = params.get('CallStatus')
+    const direction = params.get('Direction')
+    
+    console.log('📞 Call details:', {
+      callSid,
+      from,
+      to,
+      callStatus,
+      direction
+    })
 
-    if (!twilioPhoneNumber) {
-      console.error('❌ Missing Twilio phone number');
-      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+    // Create bulletproof TwiML response with required callerId
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>We're sorry, the calling service is not configured correctly.</Say>
-    <Hangup/>
-</Response>`;
-      return new Response(errorTwiml, { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
-      });
-    }
-
-    // Parse the form data from Twilio
-    const formData = await req.formData();
-    const to = formData.get('To');
-    const from = formData.get('From');
-    const callSid = formData.get('CallSid');
-    
-    console.log('Voice call details:', {
-      to: to?.toString(),
-      from: from?.toString(),
-      callSid: callSid?.toString()
-    });
-
-    // Generate TwiML response to dial the number
-    const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Dial callerId="${twilioPhoneNumber}" timeout="30" record="false">
+    <Dial callerId="***REMOVED***" timeout="30" timeLimit="3600">
         <Number>${to}</Number>
     </Dial>
-</Response>`;
+</Response>`
 
-    console.log('Generated TwiML:', twimlResponse);
-
-    return new Response(twimlResponse, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/xml'
-      }
-    });
-  } catch (error: any) {
-    console.error('❌ Handle Voice error:', error);
+    console.log('✅ TwiML generated with recording enabled')
     
-    // Return a TwiML error response
+    return new Response(twiml, {
+      status: 200,
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'text/xml' 
+      }
+    })
+
+  } catch (error) {
+    console.error('❌ TwiML handler error:', error.message)
+    
+    // Return basic TwiML without recording on error
     const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say>Sorry, there was an error processing your call.</Say>
-    <Hangup/>
-</Response>`;
-
+    <Say voice="alice">Sorry, there was an error processing your call.</Say>
+    <Hangup />
+</Response>`
+    
     return new Response(errorTwiml, {
       status: 200,
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/xml'
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'text/xml' 
       }
-    });
+    })
   }
-});
+})

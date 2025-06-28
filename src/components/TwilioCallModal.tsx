@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { PhoneOff, Clock, AlertCircle, Phone, Mic, MicOff } from 'lucide-react';
+import { PhoneOff, Clock, AlertCircle, Phone, Mic, MicOff, SkipForward } from 'lucide-react';
 import { useTwilioStore } from '@/hooks/useTwilioStore';
 import { CallLog } from '@/types/call';
 import { useToast } from '@/hooks/use-toast';
@@ -61,10 +61,33 @@ export const TwilioCallModal = ({ open, onOpenChange, callData, onCallComplete }
   const handleEndCall = () => {
     if (activeCall) {
       hangupCall();
+      toast({
+        title: "Call Ended",
+        description: "Call has been terminated successfully.",
+      });
     } else {
       // If no active call, just close modal
       handleCallComplete('failed');
     }
+  };
+
+  const handleSkipCall = () => {
+    if (activeCall) {
+      hangupCall();
+    }
+    handleCallComplete('no-answer');
+    toast({
+      title: "Call Skipped",
+      description: "Moving to next action.",
+    });
+  };
+
+  // Utility function to blur phone number
+  const blurPhoneNumber = (phoneNumber: string) => {
+    if (phoneNumber.length <= 4) return phoneNumber;
+    const lastFour = phoneNumber.slice(-4);
+    const blurred = phoneNumber.slice(0, -4).replace(/\d/g, '●');
+    return blurred + lastFour;
   };
 
   const handleMuteToggle = () => {
@@ -149,10 +172,12 @@ export const TwilioCallModal = ({ open, onOpenChange, callData, onCallComplete }
               <div className="flex justify-between items-center">
                 <div>
                   <p className="font-semibold text-lg">{callData.clientName}</p>
-                  <p className="text-sm text-muted-foreground">{callData.phoneNumber}</p>
+                  <p className="text-sm text-muted-foreground font-mono">
+                    {isConnecting || activeCall ? blurPhoneNumber(callData.phoneNumber) : callData.phoneNumber}
+                  </p>
                   {activeCall?.parameters?.CallSid && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Call ID: {activeCall.parameters.CallSid}
+                      Call ID: {activeCall.parameters.CallSid.slice(-8)}
                     </p>
                   )}
                 </div>
@@ -175,7 +200,7 @@ export const TwilioCallModal = ({ open, onOpenChange, callData, onCallComplete }
             </div>
           </div>
 
-          <div className="flex justify-center space-x-4">
+          <div className="flex justify-center space-x-3">
             {activeCall && (
               <Button 
                 variant={isMuted ? "default" : "outline"}
@@ -187,6 +212,17 @@ export const TwilioCallModal = ({ open, onOpenChange, callData, onCallComplete }
                 {isMuted ? 'Unmute' : 'Mute'}
               </Button>
             )}
+            
+            <Button 
+              variant="outline" 
+              size="lg" 
+              onClick={handleSkipCall}
+              className="flex-1"
+              disabled={!isReady}
+            >
+              <SkipForward className="mr-2 h-5 w-5" /> 
+              Skip
+            </Button>
             
             <Button 
               variant="destructive" 
