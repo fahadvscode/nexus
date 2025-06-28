@@ -40,14 +40,14 @@ This document contains the complete, tested, and WORKING configuration for Twili
 ### Twilio Account Credentials ✅ ACTIVE
 - **Account Name**: CUSTOM CRM
 - **Account Status**: Active Full Account  
-- **Account SID**: `***REMOVED***`
-- **TwiML App SID**: `***REMOVED***`
+- **Account SID**: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- **TwiML App SID**: `APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 - **Console Access**: https://console.twilio.com/
 - **Account Email**: (Same as main account)
 
 ### API Key Authentication (SECURE METHOD) ✅ WORKING
-- **API Key SID**: `***REMOVED***`
-- **API Key Secret**: `***REMOVED***`
+- **API Key SID**: `SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- **API Key Secret**: `your_api_key_secret_here`
 
 > **Why API Keys?** More secure than Auth Tokens and required for proper JWT signature validation.
 
@@ -67,12 +67,12 @@ This document contains the complete, tested, and WORKING configuration for Twili
 Set these in Supabase Dashboard → Settings → Environment Variables:
 
 ```bash
-TWILIO_ACCOUNT_SID = ***REMOVED***
-TWILIO_API_KEY_SID = ***REMOVED***
-TWILIO_API_KEY_SECRET = ***REMOVED***
-TWILIO_AUTH_TOKEN = ***REMOVED***
-TWIML_APP_SID = ***REMOVED***
-TWILIO_PHONE_NUMBER = ***REMOVED***
+TWILIO_ACCOUNT_SID = ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_API_KEY_SID = SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_API_KEY_SECRET = your_api_key_secret_here
+TWILIO_AUTH_TOKEN = your_auth_token_here
+TWIML_APP_SID = APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_PHONE_NUMBER = +1xxxxxxxxxx
 ```
 
 ## 🚀 PRODUCTION DEPLOYMENT ✅ LIVE
@@ -112,15 +112,15 @@ npx vercel --prod --yes
 ### Working JWT Structure
 ```json
 {
-  "iss": "***REMOVED***", // API Key SID (issuer)
-  "sub": "***REMOVED***", // Account SID (subject)
+  "iss": "SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // API Key SID (issuer)
+  "sub": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // Account SID (subject)
   "iat": 1719364800, // Issued at timestamp
   "nbf": 1719364800, // Not before timestamp (CRITICAL!)
   "exp": 1719368400, // Expiration timestamp
   "grants": {
     "identity": "user@example.com",
     "voice": {
-      "outgoing": { "application_sid": "***REMOVED***" },
+      "outgoing": { "application_sid": "APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
       "incoming": { "allow": true }
     }
   }
