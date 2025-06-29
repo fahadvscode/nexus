@@ -74,7 +74,21 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
   get isCallInProgress() { 
     const { activeCall, isConnecting } = get();
-    return !!activeCall || isConnecting;
+    const hasActiveCall = !!activeCall;
+    const isConnectingState = isConnecting;
+    const result = hasActiveCall || isConnectingState;
+    
+    // Debug logging for call state
+    if (hasActiveCall || isConnectingState) {
+      console.log('📞 CALL STATE DEBUG:', {
+        hasActiveCall,
+        isConnectingState,
+        activeCallStatus: activeCall?.status(),
+        result
+      });
+    }
+    
+    return result;
   },
 
   // Actions
@@ -551,13 +565,35 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
 
   hangupCall: () => {
     const { activeCall } = get();
+    console.log('🔴 HANGUP CALL - Function called');
+    console.log('📞 Active call exists:', !!activeCall);
+    console.log('📞 Call status:', activeCall?.status());
+    
     if (activeCall) {
-      console.log('📞 Ending call...');
-      activeCall.disconnect();
+      try {
+        console.log('🔚 Disconnecting active call...');
+        activeCall.disconnect();
+        console.log('✅ Call disconnect() called successfully');
+      } catch (error) {
+        console.error('❌ Error disconnecting call:', error);
+      }
     }
+    
+    // Force reset state regardless of call existence
+    console.log('🔄 Force resetting call state...');
+    set({ 
+      activeCall: null,
+      isConnecting: false,
+      callDuration: 0,
+      error: null
+    });
+    console.log('✅ Call state reset complete');
   },
 
-  endCall: () => get().hangupCall(),
+  endCall: () => {
+    console.log('🔴 END CALL - Function called');
+    get().hangupCall();
+  },
 
   muteCall: () => {
     const { activeCall, isMuted } = get();
