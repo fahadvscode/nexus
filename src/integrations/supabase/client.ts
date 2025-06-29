@@ -48,10 +48,31 @@ export const supabase = (() => {
     // Optimize realtime settings
     realtime: {
       params: {
-        eventsPerSecond: 1 // Reduce to minimum
+        eventsPerSecond: 10,
+        log_level: 'info'
       }
     }
   });
+
+  // Example of how to monitor a channel for debugging:
+  /*
+  const channel = supabase.channel('some-channel-name');
+  channel
+    .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
+      console.log('Change received!', payload)
+    })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ Realtime channel subscribed!')
+      }
+      if (status === 'CHANNEL_ERROR') {
+        console.error('❌ Realtime channel error')
+      }
+      if (status === 'TIMED_OUT') {
+        console.log('⏰ Realtime channel timed out')
+      }
+    })
+  */
   
   // Store in global location to prevent duplication
   if (typeof window !== 'undefined') {
