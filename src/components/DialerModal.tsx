@@ -31,7 +31,7 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
   const [notes, setNotes] = useState("");
   const [isPaused, setIsPaused] = useState(false);
 
-  const { makeCall, hangupCall, isCallInProgress, activeCall, callDuration } = useTwilioStore();
+  const { makeCall, hangupCall, isCallInProgress, activeCall, callDuration, isReady, error } = useTwilioStore();
   const { addCall } = useCallStore();
   const { toast } = useToast();
   const prevIsCallInProgress = useRef(isCallInProgress);
@@ -116,6 +116,9 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+        <div className="text-xs p-2 bg-gray-100 rounded">
+          Twilio Status: {isReady ? 'Ready' : 'Not Ready'} | Error: {error || 'None'}
+        </div>
         <DialogHeader>
           <DialogTitle>Enhanced Bulk Dialer</DialogTitle>
           <DialogDescription>
