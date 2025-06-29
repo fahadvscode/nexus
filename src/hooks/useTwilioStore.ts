@@ -453,113 +453,60 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   makeCall: async ({ phoneNumber, clientName, clientId }: CallOptions) => {
-    const { isReady, error, activeCall, device } = get();
+    const { isReady, isCallInProgress, device } = get();
     
-    console.log('🚀 makeCall called with:', { phoneNumber, clientName, clientId, isReady, error });
-    
+    console.log('🚀 makeCall called with:', { phoneNumber, clientName, isReady });
+
     if (!isReady) {
       const errorMsg = 'Calling device not ready. Please wait for initialization.';
-      console.log('❌ Device not ready:', errorMsg);
-      set({ error: errorMsg });
-      toast({
-        title: "Device Not Ready",
-        description: errorMsg,
-        variant: "destructive",
-      });
+      toast({ title: "Device Not Ready", description: errorMsg, variant: "destructive" });
       return;
     }
 
-    if (!phoneNumber) {
-      const errorMsg = 'Phone number is required';
-      set({ error: errorMsg });
-      toast({
-        title: "Error",
-        description: errorMsg,
-        variant: "destructive",
-      });
+    if (isCallInProgress) {
+      const errorMsg = 'Another call is already in progress.';
+      toast({ title: "Call In Progress", description: errorMsg, variant: "destructive" });
       return;
     }
 
-    if (activeCall) {
-      const errorMsg = 'Another call is already in progress';
-      set({ error: errorMsg });
-      toast({
-        title: "Call In Progress",
-        description: errorMsg,
-        variant: "destructive",
-      });
-      return;
-    }
+    set({ 
+      isConnecting: true, 
+      isCallInProgress: true, // Lock state immediately
+      callStatus: 'calling',
+      error: null,
+      callDuration: 0 
+    });
 
     try {
-      set({ 
-        error: null,
-        isConnecting: true,
-        callDuration: 0 
-      });
-      
       console.log(`📞 Making call to ${phoneNumber} for client: ${clientName || 'Unknown'}`);
       
-      // Clean phone number
       let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
       if (!cleanNumber.startsWith('+')) {
         cleanNumber = '+1' + cleanNumber;
       }
 
-      // Check if we have a real Twilio device
       if (device) {
-        // Real Twilio call
-        try {
-          console.log('🔄 Attempting real Twilio call...');
-          
-          // Ensure audio permissions are granted before making the call
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              }
-            });
-            console.log('🎤 Audio permissions confirmed for call');
-            // Stop the stream immediately since Twilio will acquire its own
-            stream.getTracks().forEach(track => track.stop());
-          } catch (audioError) {
-            console.error('❌ Audio permission error before call:', audioError);
-            throw new Error(`Microphone access required: ${audioError.message}`);
-          }
-          
-          const call = await device.connect({
-            params: {
-              To: cleanNumber,
-              ClientName: clientName || 'Unknown Client',
-              ClientId: clientId || 'unknown'
-            }
-          });
+        console.log('🔄 Attempting real Twilio call...');
+        const call = await device.connect({
+          params: { To: cleanNumber, ClientName: clientName || 'Unknown Client', ClientId: clientId || 'unknown' }
+        });
 
-          set({ activeCall: call });
-          get().setupCallEventHandlers(call);
-
-          toast({
-            title: "Call Initiated",
-            description: `Making Twilio call to ${clientName || phoneNumber}`,
-          });
-
-          console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
-        } catch (twilioError: any) {
-          console.error('❌ Real Twilio call failed:', twilioError.message);
-          throw new Error(`Call failed: ${twilioError.message}`);
-        }
+        set({ activeCall: call });
+        get().setupCallEventHandlers(call);
+        
+        toast({ title: "Call Initiating", description: `Calling ${clientName || phoneNumber}` });
+        console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
       } else {
-        // No device available - throw error instead of demo mode
-        throw new Error('Twilio device not available. Please wait for initialization or check configuration.');
+        throw new Error('Twilio device not available.');
       }
       
     } catch (err: any) {
       console.error('❌ Call failed:', err);
       set({ 
         error: err.message || 'Failed to make call',
-        isConnecting: false 
+        isConnecting: false,
+        isCallInProgress: false, // Reset state on failure
+        callStatus: 'idle'
       });
       
       toast({
