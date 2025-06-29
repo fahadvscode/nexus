@@ -372,9 +372,14 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   setupCallEventHandlers: (call: Call) => {
-    call.on('accept', () => {
-      console.log('✅ Call accepted');
-      set({ isConnecting: false });
+    call.on('accept', (acceptedCall) => {
+      console.log('✅ Call accepted, starting timer');
+      if (callTimer) clearInterval(callTimer);
+      callTimer = startCallTimer(set);
+      set({ 
+        activeCall: acceptedCall,
+        isConnecting: false 
+      });
       toast({
         title: "Call Connected",
         description: "Call is now active",
@@ -382,7 +387,9 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     });
 
     call.on('disconnect', () => {
-      console.log('📞 Call disconnected');
+      console.log('📞 Call disconnected, stopping timer');
+      if (callTimer) clearInterval(callTimer);
+      callTimer = null;
       set({ 
         activeCall: null,
         isConnecting: false,
