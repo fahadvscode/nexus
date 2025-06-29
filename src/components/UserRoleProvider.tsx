@@ -201,9 +201,10 @@ export const UserRoleProvider = ({ children }: Props) => {
     return <div className="flex items-center justify-center h-screen">Setting up your account...</div>;
   }
 
-  // If authentication validation failed, force login
+  // If authentication validation is in progress, show a non-blocking indicator instead of replacing the screen
   if (!authValidated) {
-    return <div className="flex items-center justify-center h-screen">Validating authentication...</div>;
+    // This is a non-blocking state, you might want a small overlay or toast instead
+    console.log("⏳ Authentication validation in progress, but not blocking UI...");
   }
 
   // If user is inactive, show access denied
