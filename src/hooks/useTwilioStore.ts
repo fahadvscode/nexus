@@ -72,23 +72,10 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     const { activeCall, isConnecting } = get();
     return activeCall ? 'connected' : isConnecting ? 'calling' : 'idle';
   },
-  get isCallInProgress() { 
+  get isCallInProgress() {
     const { activeCall, isConnecting } = get();
-    const hasActiveCall = !!activeCall;
-    const isConnectingState = isConnecting;
-    const result = hasActiveCall || isConnectingState;
-    
-    // Debug logging for call state
-    if (hasActiveCall || isConnectingState) {
-      console.log('📞 CALL STATE DEBUG:', {
-        hasActiveCall,
-        isConnectingState,
-        activeCallStatus: activeCall?.status(),
-        result
-      });
-    }
-    
-    return result;
+    // A call is in progress if we have an active call object OR if we are in the connecting state.
+    return !!activeCall || isConnecting;
   },
 
   // Actions
@@ -518,20 +505,29 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   hangupCall: () => {
-    const { activeCall } = get();
+    const { activeCall, device } = get();
     console.log('🔴 HANGUP CALL - Attempting to disconnect...');
     
     if (activeCall) {
-      console.log('📞 Active call found. Disconnecting...');
+      console.log('📞 Active call object found. Disconnecting...');
       activeCall.disconnect();
+    } else if (device) {
+      console.log('⚠️ No active call, but device exists. Disconnecting all calls on device.');
+      device.disconnectAll();
     } else {
-      console.log('🤷 No active call object found to disconnect.');
+      console.log('🤷 No active call or device to disconnect.');
     }
+
+    // Forcefully reset the state to ensure a clean slate
+    set({
+      activeCall: null,
+      isConnecting: false,
+      callDuration: 0,
+    });
   },
 
   endCall: () => {
-    const { activeCall, isCallInProgress } = get();
-    console.log(`🔴 END CALL - isCallInProgress: ${isCallInProgress}`);
+    console.log('🔴 END CALL - Calling hangupCall');
     get().hangupCall();
   },
 
