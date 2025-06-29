@@ -1,42 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { 
-  Phone, 
-  PhoneOff, 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
-  XCircle, 
-  SkipForward,
-  Pause,
-  Play,
-  Settings,
-  Tag,
-  FileText,
-  Bell,
-  CalendarPlus,
-  Mail,
-  MapPin,
-  User,
-  Eye
-} from "lucide-react";
 import { useTwilioStore } from "@/hooks/useTwilioStore";
 import { Client } from "@/types/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCallStore } from "@/hooks/useCallStore";
 import { CallLog } from "@/types/call";
-import { TagsNotesModal } from "./TagsNotesModal";
-import { ClientEventModal } from "./calendar/ClientEventModal";
-import { QuickReminderModal } from "./calendar/QuickReminderModal";
-import { EmailModal } from "./EmailModal";
 
 interface DialerModalProps {
   open: boolean;
@@ -46,181 +19,248 @@ interface DialerModalProps {
   onCallComplete: () => void;
 }
 
-type CallStatus = 'waiting' | 'calling' | 'connected' | 'no-answer' | 'busy' | 'failed' | 'completed' | 'skipped';
+type CallStatus = 'waiting' | 'calling' | 'connected' | 'no-answer' | 'busy' | 'failed' | 'skipped';
 
 interface DialerClient {
   client: Client;
   callStatus: CallStatus;
-  notes?: string;
-  attemptTime?: Date;
+  attemptCount: number;
+  lastAttempt: Date | null;
+  notes: string;
   twilioCallSid?: string;
 }
 
-export const DialerModal = ({ 
-  open, 
-  onOpenChange, 
-  selectedClientIds, 
-  clients, 
-  onCallComplete 
-}: DialerModalProps) => {
-  const { makeCall, endCall, isCallInProgress, currentCall, callDuration, callStatus } = useTwilioStore();
+// ENHANCED BULK DIALER - FIXED NAVIGATION & CALL CONTROLS
+export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: DialerModalProps) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [dialerClients, setDialerClients] = useState<DialerClient[]>([]);
+  const [notes, setNotes] = useState("");
+  const [isPaused, setIsPaused] = useState(false);
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [quickNotes, setQuickNotes] = useState<Record<number, string>>({});
+  const [callStartTime, setCallStartTime] = useState<Date | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showCallControls, setShowCallControls] = useState(false);
+
+  const { makeCall, endCall, isCallInProgress, callStatus } = useTwilioStore();
   const { addCall } = useCallStore();
   const { toast } = useToast();
-
-  const [dialerClients, setDialerClients] = useState<DialerClient[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isDialerActive, setIsDialerActive] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [autoAdvance, setAutoAdvance] = useState(false);
-  const [callDelay, setCallDelay] = useState(2);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showClientCard, setShowClientCard] = useState(true);
   
-  // Modal states for quick actions
-  const [tagsNotesClient, setTagsNotesClient] = useState<Client | null>(null);
-  const [schedulingClient, setSchedulingClient] = useState<Client | null>(null);
-  const [reminderClient, setReminderClient] = useState<Client | null>(null);
-  const [emailingClient, setEmailingClient] = useState<Client | null>(null);
-  
-  useEffect(() => {
-    if (currentCall && dialerClients[currentIndex]?.callStatus === 'calling') {
-      setDialerClients(prev => prev.map((dialerClient, i) =>
-        i === currentIndex
-          ? { ...dialerClient, twilioCallSid: currentCall.parameters.CallSid }
-          : dialerClient
-      ));
-    }
-  }, [currentCall, currentIndex, dialerClients]);
+  // Debounce timeout ref
+  const actionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Initialize clients only once
   useEffect(() => {
     if (open && clients.length > 0) {
+      console.log('🔄 Initializing dialer with', clients.length, 'clients');
+      
       const initialClients = clients.map(client => ({
         client,
-        callStatus: 'waiting' as CallStatus
+        callStatus: 'waiting' as CallStatus,
+        attemptCount: 0,
+        lastAttempt: null,
+        notes: ''
       }));
+      
       setDialerClients(initialClients);
       setCurrentIndex(0);
-      setIsDialerActive(false);
-      setIsPaused(false);
       setNotes("");
+      setIsPaused(false);
+      setIsOnBreak(false);
+      setIsProcessing(false);
+      setShowCallControls(false);
+      setQuickNotes({});
     }
-  }, [open, clients]);
+  }, [open, clients.length]);
 
-  const updateClientStatus = useCallback((index: number, status: CallStatus, notes?: string) => {
-    setDialerClients(prev => prev.map((dialerClient, i) => 
-      i === index 
-        ? { ...dialerClient, callStatus: status, attemptTime: new Date(), notes: notes || dialerClient.notes }
-        : dialerClient
-    ));
+  // Monitor call status changes
+  useEffect(() => {
+    if (isCallInProgress) {
+      setShowCallControls(true);
+    } else {
+      // Keep controls visible for a short time after call ends
+      const timer = setTimeout(() => {
+        setShowCallControls(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isCallInProgress]);
+
+  // Safe end call function with proper error handling and forced state reset
+  const safeEndCall = useCallback(async (force = false) => {
+    if (isCallInProgress || force) {
+      console.log('📞 Ending active call (force:', force, ')');
+      try {
+        await endCall();
+        console.log('✅ Call ended successfully');
+        toast({
+          title: 'Call Ended',
+          description: 'Call ended successfully.'
+        });
+        setIsProcessing(false);
+        return true;
+      } catch (error) {
+        console.error('❌ Error ending call:', error);
+        toast({
+          title: 'Error Ending Call',
+          description: 'Could not end call. Forcing state reset.',
+          variant: 'destructive'
+        });
+        setIsProcessing(false);
+        return false;
+      }
+    }
+    setIsProcessing(false);
+    return true;
+  }, [isCallInProgress, endCall, toast]);
+
+  // Debounced action wrapper
+  const debounceAction = useCallback((action: () => void, delay = 500) => {
+    if (actionTimeoutRef.current) {
+      clearTimeout(actionTimeoutRef.current);
+    }
+    
+    actionTimeoutRef.current = setTimeout(() => {
+      action();
+    }, delay);
   }, []);
 
-  const moveToNextClient = useCallback(() => {
-    if (currentIndex < dialerClients.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-      // Clear any existing notes for the next client
-      setNotes("");
-    } else {
-      setIsDialerActive(false);
-      toast({
-        title: "Dialer Completed",
-        description: `All ${dialerClients.length} clients have been processed.`,
-      });
-      onCallComplete(); // Notify parent component
+  // Enhanced jump to client with proper call handling
+  const jumpToClient = useCallback(async (index: number) => {
+    if (isProcessing) {
+      console.log('⚠️ Already processing, ignoring jump request');
+      return;
     }
-  }, [currentIndex, dialerClients.length, toast, onCallComplete]);
+    
+    if (index < 0 || index >= dialerClients.length) {
+      console.log('⚠️ Invalid index:', index);
+      return;
+    }
 
-  // Handle quick actions
-  const handleTagsNotes = (client: Client) => {
-    setTagsNotesClient(client);
-  };
-
-  const handleScheduleEvent = (client: Client) => {
-    setSchedulingClient(client);
-  };
-
-  const handleSetReminder = (client: Client) => {
-    setReminderClient(client);
-  };
-
-  const handleSendEmail = (client: Client) => {
-    setEmailingClient(client);
-  };
-
-  const refreshClientData = () => {
-    // This would typically refresh the client data from the store
-    // For now, we'll just show a success message
+    setIsProcessing(true);
+    
+    console.log(`🎯 Jumping to client ${index + 1}: ${dialerClients[index]?.client.name}`);
+    
+    // Always end call first
+    await safeEndCall();
+    
+    // Save current notes
+    if (notes.trim()) {
+      setQuickNotes(prev => ({
+        ...prev,
+        [currentIndex]: notes
+      }));
+    }
+    
+    // Update index and load notes
+    setCurrentIndex(index);
+    setNotes(quickNotes[index] || "");
+    
     toast({
-      title: "Client Updated",
-      description: "Client information has been updated successfully.",
+      title: "📍 Jumped to Client",
+      description: `Now on client ${index + 1}: ${dialerClients[index]?.client.name}`,
     });
-  };
-
-  const handleCallEnd = useCallback((finalStatus: CallStatus) => {
-    const currentDialerClient = dialerClients[currentIndex];
-    if (!currentDialerClient) return;
-
-    const outcomeMap: Partial<Record<CallStatus, "connected" | "no-answer" | "busy" | "failed" | "voicemail" | "declined" | "initiated">> = {
-      'connected': 'connected',
-      'completed': 'connected',
-      'no-answer': 'no-answer',
-      'busy': 'busy',
-      'failed': 'failed',
-    };
-    const logOutcome = outcomeMap[finalStatus];
-
-    if (logOutcome) {
-      const callLog: Omit<CallLog, 'id'> = {
-        clientId: currentDialerClient.client.id,
-        clientName: currentDialerClient.client.name,
-        phoneNumber: currentDialerClient.client.phone,
-        startTime: new Date(Date.now() - callDuration * 1000),
-        endTime: new Date(),
-        duration: callDuration,
-        outcome: logOutcome,
-        notes: notes || `Dialer call - ${finalStatus}`,
-        followUpRequired: finalStatus !== 'completed' && finalStatus !== 'connected',
-        createdBy: 'current-user', // Replace with actual user
-        tags: ['dialer'],
-        twilioCallSid: currentDialerClient.twilioCallSid,
-      };
-
-      addCall(callLog);
-      toast({ title: "Call Logged", description: `Call to ${currentDialerClient.client.name} ended with status: ${finalStatus}` });
-    }
-
-    updateClientStatus(currentIndex, finalStatus, notes);
     
-    // Note: Movement to next client is now handled by the specific action functions
-    // (terminateCurrentCall, markCallComplete, skipCurrentCall) to give better control
-  }, [dialerClients, currentIndex, callDuration, notes, addCall, updateClientStatus, toast, autoAdvance, moveToNextClient, isCallInProgress]);
+    setIsProcessing(false);
+  }, [isProcessing, dialerClients, currentIndex, notes, quickNotes, safeEndCall, toast]);
 
-  useEffect(() => {
-    // This effect handles the case where a call ends unexpectedly (e.g., the other party hangs up).
-    if (callStatus === 'idle' && dialerClients[currentIndex]?.callStatus === 'calling') {
-      handleCallEnd('failed');
+  // Navigation functions
+  const jumpBack = useCallback(() => {
+    if (currentIndex > 0) {
+      debounceAction(() => jumpToClient(currentIndex - 1));
+    } else {
+      toast({
+        title: "⚠️ At First Client",
+        description: "Already at the first client",
+      });
     }
-  }, [callStatus, currentIndex, dialerClients, handleCallEnd]);
+  }, [currentIndex, jumpToClient, debounceAction, toast]);
 
+  // Enhanced next client function with fallback
+  const nextClient = useCallback(async (force = false) => {
+    if (isProcessing && !force) {
+      toast({
+        title: '⏳ Please Wait',
+        description: 'Still processing previous action. Use Force Next if stuck.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setIsProcessing(true);
+    // End current call if active
+    if (isCallInProgress || force) {
+      await safeEndCall(force);
+      toast({
+        title: '📞 Call Ended',
+        description: 'Moving to next client...',
+      });
+    }
+    // Save current notes
+    if (notes.trim()) {
+      setQuickNotes(prev => ({
+        ...prev,
+        [currentIndex]: notes
+      }));
+    }
+    // Move to next client
+    if (currentIndex < dialerClients.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setNotes(quickNotes[currentIndex + 1] || "");
+      toast({
+        title: '➡️ Next Client',
+        description: `Now on client ${currentIndex + 2}: ${dialerClients[currentIndex + 1]?.client.name}`,
+      });
+    } else {
+      toast({
+        title: '✅ All Clients Complete',
+        description: "You've reached the end of the client list",
+      });
+      onCallComplete();
+    }
+    setIsProcessing(false);
+  }, [isProcessing, isCallInProgress, safeEndCall, notes, currentIndex, quickNotes, dialerClients, toast, onCallComplete]);
 
-  const makeNextCall = useCallback(async () => {
-    if (currentIndex >= dialerClients.length || isPaused || isCallInProgress) {
+  // Enhanced call current client with better state management
+  const callCurrentClient = useCallback(async () => {
+    if (isProcessing) {
+      console.log('⚠️ Already processing, ignoring call request');
+      return;
+    }
+    
+    const currentClient = dialerClients[currentIndex]?.client;
+    if (!currentClient || isPaused || isOnBreak) {
+      console.log('⚠️ Cannot call:', { currentClient: !!currentClient, isPaused, isOnBreak });
       return;
     }
 
-    const currentDialerClient = dialerClients[currentIndex];
-    
-    // Skip if this client has already been processed
-    if (!currentDialerClient || currentDialerClient.callStatus !== 'waiting') {
+    if (isCallInProgress) {
+      toast({
+        title: "⚠️ Call Already Active",
+        description: "Please hang up the current call first",
+        variant: "destructive"
+      });
       return;
     }
+
+    setIsProcessing(true);
+    setCallStartTime(new Date());
+    setShowCallControls(true);
     
-    const currentClient = currentDialerClient.client;
+    console.log(`📞 Calling ${currentClient.name} at ${currentClient.phone}`);
     
+    // Update attempt count and status
+    setDialerClients(prev => prev.map((dialerClient, i) =>
+      i === currentIndex
+        ? { 
+            ...dialerClient, 
+            callStatus: 'calling',
+            attemptCount: (dialerClient.attemptCount || 0) + 1,
+            lastAttempt: new Date()
+          }
+        : dialerClient
+    ));
+
     try {
-      updateClientStatus(currentIndex, 'calling');
-      setNotes("");
-
       await makeCall({
         phoneNumber: currentClient.phone,
         clientId: currentClient.id,
@@ -228,203 +268,219 @@ export const DialerModal = ({
       });
       
       toast({
-        title: "Calling",
+        title: "📞 Call Initiated",
         description: `Calling ${currentClient.name} at ${currentClient.phone}`,
       });
     } catch (error) {
-      console.error('Failed to make call:', error);
-      updateClientStatus(currentIndex, 'failed');
+      console.error('❌ Call failed:', error);
+      
+      // Update status to failed
+      setDialerClients(prev => prev.map((dialerClient, i) =>
+        i === currentIndex
+          ? { ...dialerClient, callStatus: 'failed' }
+          : dialerClient
+      ));
+      
       toast({
-        title: "Call Failed",
-        description: `Failed to call ${currentClient.name}. Moving to next client.`,
-        variant: "destructive",
+        title: "❌ Call Failed",
+        description: `Failed to call ${currentClient.name}`,
+        variant: "destructive"
       });
-      // Auto-advance to next client on failure
-      setTimeout(() => {
-        moveToNextClient();
-      }, 1000);
+    } finally {
+      setIsProcessing(false);
     }
-  }, [currentIndex, dialerClients, isPaused, isCallInProgress, makeCall, updateClientStatus, toast, moveToNextClient]);
+  }, [isProcessing, dialerClients, currentIndex, isPaused, isOnBreak, isCallInProgress, makeCall, toast]);
 
-  useEffect(() => {
-    if (isDialerActive && !isPaused && !isCallInProgress && currentIndex < dialerClients.length) {
-      const currentClient = dialerClients[currentIndex];
-      // Only make a call if the current client is waiting (not already processed)
-      if (currentClient && currentClient.callStatus === 'waiting') {
-        const timer = setTimeout(() => {
-          makeNextCall();
-        }, callDelay * 1000);
-        
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [isDialerActive, isPaused, isCallInProgress, currentIndex, makeNextCall, dialerClients, callDelay]);
-
-  const startDialer = () => {
-    setIsDialerActive(true);
-    setIsPaused(false);
-  };
-
-  const pauseDialer = () => {
-    setIsPaused(true);
-    if (isCallInProgress) {
-      endCall();
-    }
-  };
-
-  const stopDialer = () => {
-    setIsDialerActive(false);
-    if (isCallInProgress) {
-      endCall();
-    }
-    onOpenChange(false);
-  };
-
-  const skipCurrentCall = () => {
-    if (isCallInProgress) {
-      endCall();
+  // Enhanced hang up function with fallback
+  const hangUpCall = useCallback(async (force = false) => {
+    console.log('📞 Hang up requested (force:', force, ')');
+    if (isCallInProgress || force) {
+      await safeEndCall(force);
+      setDialerClients(prev => prev.map((dialerClient, i) =>
+        i === currentIndex
+          ? { ...dialerClient, callStatus: 'failed' }
+          : dialerClient
+      ));
       toast({
-        title: "Call Skipped",
-        description: "Call terminated and moving to next client.",
+        title: '📞 Call Ended',
+        description: 'Call has been hung up',
       });
     } else {
       toast({
-        title: "Client Skipped",
-        description: "Moving to next client without calling.",
+        title: 'ℹ️ No Active Call',
+        description: 'There is no call to hang up',
       });
     }
-    
-    updateClientStatus(currentIndex, 'skipped');
-    
-    // Move to next client automatically
-    setTimeout(() => {
-      moveToNextClient();
-    }, 1000); // Short delay to allow call to properly terminate if needed
-  };
+    setIsProcessing(false);
+  }, [isCallInProgress, safeEndCall, currentIndex, toast]);
 
-  const terminateCurrentCall = () => {
-    if (isCallInProgress) {
-      endCall();
+  // Retry with attempt limit
+  const retryCurrentClient = useCallback(() => {
+    const currentClient = dialerClients[currentIndex];
+    if (currentClient?.attemptCount >= 3) {
       toast({
-        title: "Call Ended",
-        description: "Call has been terminated and moving to next client.",
+        title: "🚫 Max Attempts Reached",
+        description: "This client has been called 3 times already. Please mark the status.",
+        variant: "destructive",
       });
+      return;
     }
-    
-    // Log the terminated call
-    handleCallEnd('failed');
-    
-    // Move to next client automatically
-    setTimeout(() => {
-      moveToNextClient();
-    }, 1000); // Short delay to allow call to properly terminate
-  };
+    debounceAction(() => callCurrentClient());
+  }, [dialerClients, currentIndex, callCurrentClient, debounceAction, toast]);
 
-  // Utility function to blur phone number
-  const blurPhoneNumber = (phoneNumber: string) => {
-    if (phoneNumber.length <= 4) return phoneNumber;
-    const lastFour = phoneNumber.slice(-4);
-    const blurred = phoneNumber.slice(0, -4).replace(/\d/g, '●');
-    return blurred + lastFour;
-  };
-
-  const markCallComplete = (outcome: 'connected' | 'no-answer' | 'busy' | 'failed') => {
-    if (isCallInProgress) {
-      endCall();
-    }
+  // Break toggle with proper call handling
+  const toggleBreak = useCallback(async () => {
+    console.log(`🛑 ${isOnBreak ? 'Ending' : 'Starting'} break`);
+    
+    // End call if active
+    await safeEndCall();
+    
+    setIsOnBreak(!isOnBreak);
     
     toast({
-      title: "Call Completed",
-      description: `Call marked as ${outcome} and moving to next client.`,
+      title: isOnBreak ? "🟢 Break Ended" : "🛑 Taking Break",
+      description: isOnBreak ? "Back to calling!" : "Paused for break - all calls stopped",
     });
-    
-    handleCallEnd(outcome);
-    
-    // Move to next client automatically
-    setTimeout(() => {
-      moveToNextClient();
-    }, 1000); // Short delay to allow call to properly terminate
-  };
+  }, [isOnBreak, safeEndCall, toast]);
 
-  const getStatusIcon = (status: CallStatus) => {
-    switch (status) {
-      case 'calling': return <Phone className="h-4 w-4 text-blue-500" />;
-      case 'completed':
-      case 'connected': return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'no-answer': return <XCircle className="h-4 w-4 text-yellow-500" />;
-      case 'busy': return <XCircle className="h-4 w-4 text-orange-500" />;
-      case 'failed': return <AlertCircle className="h-4 w-4 text-red-500" />;
-      case 'skipped': return <SkipForward className="h-4 w-4 text-gray-500" />;
-      default: return <Clock className="h-4 w-4 text-gray-400" />;
+  // Enhanced quick mark with proper call handling
+  const quickMark = useCallback(async (status: CallStatus, autoAdvance = true) => {
+    if (isProcessing) {
+      console.log('⚠️ Already processing, ignoring mark request');
+      return;
     }
-  };
+    
+    setIsProcessing(true);
+    
+    console.log(`✅ Marking client ${currentIndex + 1} as: ${status}`);
+    
+    // End call first
+    await safeEndCall();
 
-  const getStatusColor = (status: CallStatus) => {
-    switch (status) {
-      case 'calling': return 'bg-blue-100 text-blue-800';
-      case 'completed':
-      case 'connected': return 'bg-green-100 text-green-800';
-      case 'no-answer': return 'bg-yellow-100 text-yellow-800';
-      case 'busy': return 'bg-orange-100 text-orange-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      case 'skipped': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-50 text-gray-600';
+    // Save current notes
+    setQuickNotes(prev => ({
+      ...prev,
+      [currentIndex]: notes
+    }));
+
+    // Update client status
+    setDialerClients(prev => prev.map((dialerClient, i) =>
+      i === currentIndex
+        ? { 
+            ...dialerClient, 
+            callStatus: status, 
+            notes: notes || `Marked as ${status}`,
+          }
+        : dialerClient
+    ));
+
+    // Log the call
+    const currentClient = dialerClients[currentIndex]?.client;
+    if (currentClient) {
+      const callLog: Omit<CallLog, 'id'> = {
+        clientId: currentClient.id,
+        clientName: currentClient.name,
+        phoneNumber: currentClient.phone,
+        startTime: callStartTime || new Date(),
+        endTime: new Date(),
+        duration: callStartTime ? Math.floor((new Date().getTime() - callStartTime.getTime()) / 1000) : 0,
+        outcome: status === 'connected' ? 'connected' : 
+                status === 'no-answer' ? 'no-answer' : 
+                status === 'busy' ? 'busy' : 'failed',
+        notes: notes || `Dialer: ${status}`,
+        followUpRequired: status !== 'connected',
+        createdBy: 'current-user',
+        tags: ['dialer'],
+      };
+      addCall(callLog);
     }
-  };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+    toast({
+      title: `✅ Marked as ${status}`,
+      description: autoAdvance ? "Moving to next client..." : "Staying on current client",
+    });
 
-  // Keyboard shortcuts for smooth operation
+    setIsProcessing(false);
+
+    // Auto-advance if enabled
+    if (autoAdvance) {
+      debounceAction(() => nextClient(), 1000);
+    }
+  }, [isProcessing, currentIndex, notes, dialerClients, callStartTime, addCall, toast, safeEndCall, nextClient, debounceAction]);
+
+  // Bulk actions
+  const markAllRemaining = useCallback((status: CallStatus) => {
+    const remainingIndexes = dialerClients
+      .map((client, index) => ({ client, index }))
+      .filter(({ client, index }) => index >= currentIndex && client.callStatus === 'waiting')
+      .map(({ index }) => index);
+
+    setDialerClients(prev => prev.map((dialerClient, i) =>
+      remainingIndexes.includes(i)
+        ? { ...dialerClient, callStatus: status, notes: `Bulk marked as ${status}` }
+        : dialerClient
+    ));
+
+    toast({
+      title: "📋 Bulk Action Complete",
+      description: `Marked ${remainingIndexes.length} remaining clients as ${status}`,
+    });
+  }, [dialerClients, currentIndex, toast]);
+
+  // Enhanced keyboard shortcuts
   useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      // Only handle shortcuts when dialer is active and modal is open
-      if (!open || !isDialerActive || currentIndex >= dialerClients.length) return;
-      
-      // Prevent shortcuts when user is typing in input fields
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
         return;
       }
       
-      const key = event.key.toLowerCase();
+      // Don't trigger if modal is closed
+      if (!open) return;
       
-      switch (key) {
-        case 's':
-          event.preventDefault();
-          skipCurrentCall();
+      switch (e.key.toLowerCase()) {
+        case ' ': // Space to call
+          e.preventDefault();
+          callCurrentClient();
           break;
-        case 'e':
-          if (isCallInProgress) {
-            event.preventDefault();
-            terminateCurrentCall();
-          }
-          break;
-        case 'c':
-          event.preventDefault();
-          markCallComplete('connected');
-          break;
-        case 'n':
-          event.preventDefault();
-          markCallComplete('no-answer');
-          break;
-        case 'b':
-          event.preventDefault();
-          markCallComplete('busy');
-          break;
-        case 'f':
-          event.preventDefault();
-          markCallComplete('failed');
-          break;
-        case 'p':
-          event.preventDefault();
-          pauseDialer();
-          break;
+        case 'h': // H to hang up
         case 'escape':
-          event.preventDefault();
-          stopDialer();
+          e.preventDefault();
+          hangUpCall();
+          break;
+        case 'arrowright': // Right arrow for next
+        case 'n': // N for next
+          e.preventDefault();
+          nextClient();
+          break;
+        case 'arrowleft': // Left arrow for previous
+        case 'p': // P for previous
+          e.preventDefault();
+          jumpBack();
+          break;
+        case 'c': // C for connected
+          e.preventDefault();
+          quickMark('connected');
+          break;
+        case 'a': // A for no answer
+          e.preventDefault();
+          quickMark('no-answer');
+          break;
+        case 'b': // B for busy
+          e.preventDefault();
+          quickMark('busy');
+          break;
+        case 'f': // F for failed
+          e.preventDefault();
+          quickMark('failed');
+          break;
+        case 's': // S for skip
+          e.preventDefault();
+          quickMark('skipped');
+          break;
+        case 'r': // R for retry
+          e.preventDefault();
+          retryCurrentClient();
           break;
       }
     };
@@ -433,536 +489,293 @@ export const DialerModal = ({
       document.addEventListener('keydown', handleKeyPress);
       return () => document.removeEventListener('keydown', handleKeyPress);
     }
-  }, [open, isDialerActive, currentIndex, dialerClients.length, isCallInProgress, skipCurrentCall, terminateCurrentCall, markCallComplete, pauseDialer, stopDialer]);
+  }, [open, callCurrentClient, hangUpCall, nextClient, jumpBack, quickMark, retryCurrentClient]);
 
-  const completedCalls = dialerClients.filter(c => c.callStatus !== 'waiting' && c.callStatus !== 'calling').length;
-  const progress = dialerClients.length > 0 ? (completedCalls / dialerClients.length) * 100 : 0;
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (actionTimeoutRef.current) {
+        clearTimeout(actionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Navigation helpers
+  const getCompletedCount = () => dialerClients.filter(c => c.callStatus !== 'waiting').length;
+  const getRemainingCount = () => dialerClients.filter(c => c.callStatus === 'waiting').length;
+  const getConnectedCount = () => dialerClients.filter(c => c.callStatus === 'connected').length;
+
+  const currentClient = dialerClients[currentIndex]?.client;
+  const currentDialerClient = dialerClients[currentIndex];
 
   if (!open) return null;
-
-  const currentDialerClient = dialerClients[currentIndex];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
+            <span>📞 Bulk Dialer</span>
             <div className="flex items-center space-x-2">
-              <Phone className="h-5 w-5" />
-              <span>Live Call Dialer</span>
-              <Badge variant="secondary">{dialerClients.length} clients</Badge>
-              <Badge variant="outline" className="bg-green-50 text-green-700">REAL CALLS</Badge>
+              <Badge variant={isOnBreak ? "destructive" : isPaused ? "secondary" : "default"}>
+                {isOnBreak ? "🛑 On Break" : isPaused ? "⏸️ Paused" : "🟢 Active"}
+              </Badge>
+              <Badge variant="outline">
+                {currentIndex + 1} / {dialerClients.length}
+              </Badge>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            Live call dialer to connect with multiple clients sequentially.
+          <DialogDescription>
+            📊 Completed: {getCompletedCount()} | ✅ Connected: {getConnectedCount()} | 📋 Remaining: {getRemainingCount()}
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6">
-          <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
-            <CardContent className="pt-4">
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {currentIndex + 1} / {dialerClients.length}
-                    </div>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div>Completed: <span className="font-semibold text-green-600">{completedCalls}</span></div>
-                      <div>Remaining: <span className="font-semibold text-orange-600">{dialerClients.length - completedCalls - (isCallInProgress ? 1 : 0)}</span></div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-green-600">{Math.round(progress)}%</div>
-                    <div className="text-xs text-gray-500">Complete</div>
-                  </div>
-                </div>
-                <Progress value={progress} className="h-3 bg-gray-200" />
-                {isDialerActive && (
-                  <div className="text-center">
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 animate-pulse">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Dialer Active
+          {/* Current Client Card */}
+          {currentClient && (
+            <Card className={`border-2 ${isOnBreak ? 'border-red-300 bg-red-50' : isPaused ? 'border-yellow-300 bg-yellow-50' : 'border-blue-300 bg-blue-50'}`}>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xl">{currentClient.name}</span>
+                    <Badge className="ml-2 text-xs">
+                      {currentDialerClient?.callStatus?.toUpperCase() || 'WAITING'}
                     </Badge>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {showSettings && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Dialer Settings</CardTitle>
+                  <div className="text-right text-sm text-gray-600">
+                    {currentDialerClient?.attemptCount > 0 && (
+                      <div>Attempts: {currentDialerClient.attemptCount}</div>
+                    )}
+                    {currentDialerClient?.lastAttempt && (
+                      <div>Last: {currentDialerClient.lastAttempt.toLocaleTimeString()}</div>
+                    )}
+                  </div>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="auto-advance">Auto-advance to next client</Label>
-                  <Switch
-                    id="auto-advance"
-                    checked={autoAdvance}
-                    onCheckedChange={setAutoAdvance}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="show-client-card">Show client details card</Label>
-                  <Switch
-                    id="show-client-card"
-                    checked={showClientCard}
-                    onCheckedChange={setShowClientCard}
-                  />
-                </div>
-                <div className="flex items-center space-x-4">
-                  <Label htmlFor="call-delay">Delay between calls (seconds):</Label>
-                  <input
-                    id="call-delay"
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={callDelay}
-                    onChange={(e) => setCallDelay(Number(e.target.value))}
-                    className="w-20 px-2 py-1 border rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                  <span className="text-xs text-gray-500">Recommended: 2-5 seconds</span>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="font-mono text-lg">{currentClient.phone}</p>
+                    <p className="text-sm text-gray-600">{currentClient.email}</p>
+                    <p className="text-sm text-gray-600">{currentClient.address}</p>
+                  </div>
+                  <div>
+                    <Label>Quick Notes</Label>
+                    <Textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Quick notes for this call..."
+                      rows={3}
+                      className="mt-1"
+                      disabled={isProcessing}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {currentDialerClient && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Call Status Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="flex items-center space-x-2">
-                      <Phone className="h-5 w-5" />
-                      <span>Current Call</span>
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowClientCard(!showClientCard)}
-                    >
-                      <Eye className="h-4 w-4" />
-                      {showClientCard ? 'Hide' : 'Show'} Details
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-medium text-lg">
-                      {currentDialerClient.client.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold">{currentDialerClient.client.name}</h3>
-                      <p className="text-gray-600 font-mono">
-                        {currentDialerClient.callStatus === 'calling' || isCallInProgress ? 
-                          blurPhoneNumber(currentDialerClient.client.phone) : 
-                          currentDialerClient.client.phone
-                        }
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Client {currentIndex + 1} of {dialerClients.length}
-                      </p>
-                      <Badge className={`${getStatusColor(currentDialerClient.callStatus)} border text-sm font-medium mt-2`}>
-                        {currentDialerClient.callStatus.replace('-', ' ').toUpperCase()}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {isCallInProgress && (
-                    <div className="flex items-center justify-center space-x-2 text-lg font-mono bg-green-50 p-3 rounded-lg">
-                      <Clock className="h-5 w-5 text-green-600" />
-                      <span className="text-green-800 font-semibold">{formatDuration(callDuration)}</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="call-notes">Call Notes</Label>
-                    <Textarea
-                      id="call-notes"
-                      placeholder="Add notes about this call..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      disabled={!isDialerActive}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Client Details Card */}
-              {showClientCard && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <User className="h-5 w-5" />
-                      <span>Client Details</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Client Information */}
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Mail className="h-4 w-4 text-blue-500" />
-                        <span className="text-gray-600">{currentDialerClient.client.email || 'No email'}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-sm">
-                        <MapPin className="h-4 w-4 text-red-500" />
-                        <span className="text-gray-600">{currentDialerClient.client.address || 'No address'}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Badge variant="outline" className="text-xs">
-                          {currentDialerClient.client.status?.toUpperCase() || 'UNKNOWN'}
-                        </Badge>
-                        {currentDialerClient.client.source && (
-                          <Badge variant="secondary" className="text-xs">
-                            {currentDialerClient.client.source}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tags */}
-                    <div>
-                      <Label className="text-sm font-medium flex items-center space-x-2 mb-2">
-                        <Tag className="h-4 w-4" />
-                        <span>Tags</span>
-                      </Label>
-                      <div className="flex flex-wrap gap-1">
-                        {(currentDialerClient.client.tags && currentDialerClient.client.tags.length > 0) ? (
-                          currentDialerClient.client.tags.map((tag, index) => (
-                            <Badge key={index} variant="secondary" className="text-xs bg-gray-100 text-gray-600">
-                              {tag}
-                            </Badge>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400">No tags</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Notes */}
-                    {currentDialerClient.client.notes && (
-                      <div>
-                        <Label className="text-sm font-medium flex items-center space-x-2 mb-2">
-                          <FileText className="h-4 w-4" />
-                          <span>Client Notes</span>
-                        </Label>
-                        <div className="bg-gray-50 p-3 rounded-lg text-sm text-gray-700">
-                          {currentDialerClient.client.notes}
-                        </div>
-                      </div>
-                    )}
-
-                    <Separator />
-
-                    {/* Quick Actions */}
-                    <div>
-                      <Label className="text-sm font-medium mb-3 block">Quick Actions</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleTagsNotes(currentDialerClient.client)}
-                          className="hover:bg-indigo-50 hover:text-indigo-700"
-                        >
-                          <Tag className="h-4 w-4 mr-1" />
-                          Tags & Notes
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleScheduleEvent(currentDialerClient.client)}
-                          className="hover:bg-purple-50 hover:text-purple-700"
-                        >
-                          <CalendarPlus className="h-4 w-4 mr-1" />
-                          Schedule
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSetReminder(currentDialerClient.client)}
-                          className="hover:bg-orange-50 hover:text-orange-700"
-                        >
-                          <Bell className="h-4 w-4 mr-1" />
-                          Reminder
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSendEmail(currentDialerClient.client)}
-                          className="hover:bg-blue-50 hover:text-blue-700"
-                        >
-                          <Mail className="h-4 w-4 mr-1" />
-                          Email
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Enhanced Controls */}
-          <Card className="bg-gradient-to-r from-gray-50 to-gray-100 border-2">
+          {/* Enhanced Action Buttons - ALWAYS VISIBLE */}
+          <Card>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {!isDialerActive ? (
-                  <div className="flex justify-center">
-                    <Button
-                      onClick={startDialer}
-                      size="lg"
-                      className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                      disabled={dialerClients.length === 0}
-                    >
-                      <Play className="h-6 w-6 mr-3" />
-                      Start Bulk Dialer
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Primary Action Buttons */}
-                    <div className="flex justify-center space-x-3">
-                      <Button
-                        onClick={skipCurrentCall}
-                        size="lg"
-                        variant="outline"
-                        className="bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-800 px-6 py-3 font-semibold shadow-md hover:shadow-lg transition-all duration-200"
-                        disabled={currentIndex >= dialerClients.length}
-                        title="Skip this client and move to next (Shortcut: S)"
-                      >
-                        <SkipForward className="h-5 w-5 mr-2" />
-                        Skip Client
-                      </Button>
-                      
-                      {isCallInProgress && (
-                        <Button
-                          onClick={terminateCurrentCall}
-                          size="lg"
-                          variant="destructive"
-                          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 font-semibold shadow-md hover:shadow-lg transition-all duration-200"
-                          title="End current call and move to next (Shortcut: E)"
-                        >
-                          <PhoneOff className="h-5 w-5 mr-2" />
-                          End Call
-                        </Button>
-                      )}
-                      
-                      <Button
-                        onClick={() => markCallComplete('connected')}
-                        size="lg"
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 font-semibold shadow-md hover:shadow-lg transition-all duration-200"
-                        disabled={currentIndex >= dialerClients.length}
-                        title="Mark as connected and move to next (Shortcut: C)"
-                      >
-                        <CheckCircle className="h-5 w-5 mr-2" />
-                        Connected
-                      </Button>
-                    </div>
+                {/* Primary Actions */}
+                <div className="flex justify-center space-x-3">
+                  <Button
+                    onClick={callCurrentClient}
+                    size="lg"
+                    className="bg-green-500 hover:bg-green-600 px-8"
+                    disabled={!currentClient || isPaused || isOnBreak || isCallInProgress || isProcessing}
+                  >
+                    📞 Call {currentDialerClient?.attemptCount > 0 ? 'Again' : 'Now'}
+                  </Button>
+                  
+                  <Button
+                    onClick={hangUpCall}
+                    size="lg"
+                    variant="destructive"
+                    disabled={!isCallInProgress || isProcessing}
+                  >
+                    📞 Hang Up
+                  </Button>
+                  
+                  <Button
+                    onClick={toggleBreak}
+                    size="lg"
+                    variant={isOnBreak ? "default" : "secondary"}
+                    className={isOnBreak ? "bg-green-500 hover:bg-green-600" : ""}
+                    disabled={isProcessing}
+                  >
+                    {isOnBreak ? "🟢 End Break" : "🛑 Take Break"}
+                  </Button>
+                </div>
 
-                    {/* Secondary Action Buttons */}
-                    <div className="flex justify-center space-x-2">
-                      <Button
-                        onClick={() => markCallComplete('no-answer')}
-                        size="sm"
-                        variant="outline"
-                        className="bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-800"
-                        disabled={currentIndex >= dialerClients.length}
-                        title="Mark as no answer (Shortcut: N)"
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        No Answer
-                      </Button>
-                      
-                      <Button
-                        onClick={() => markCallComplete('busy')}
-                        size="sm"
-                        variant="outline"
-                        className="bg-purple-50 hover:bg-purple-100 border-purple-300 text-purple-800"
-                        disabled={currentIndex >= dialerClients.length}
-                        title="Mark as busy (Shortcut: B)"
-                      >
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        Busy
-                      </Button>
-                      
-                      <Button
-                        onClick={() => markCallComplete('failed')}
-                        size="sm"
-                        variant="outline"
-                        className="bg-red-50 hover:bg-red-100 border-red-300 text-red-800"
-                        disabled={currentIndex >= dialerClients.length}
-                        title="Mark as failed (Shortcut: F)"
-                      >
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        Failed
-                      </Button>
-                    </div>
+                {/* Navigation - ALWAYS VISIBLE */}
+                <div className="flex justify-center space-x-2">
+                  <Button
+                    onClick={jumpBack}
+                    variant="outline"
+                    disabled={currentIndex === 0}
+                  >
+                    ⬅️ Previous
+                  </Button>
+                  <Button
+                    onClick={() => setIsPaused(!isPaused)}
+                    variant="outline"
+                    className={isPaused ? "bg-yellow-100" : ""}
+                  >
+                    {isPaused ? "▶️ Resume" : "⏸️ Pause"}
+                  </Button>
+                  <Button
+                    onClick={() => nextClient(false)}
+                    variant="outline"
+                    disabled={currentIndex >= dialerClients.length - 1}
+                  >
+                    Next ➡️
+                  </Button>
+                  <Button
+                    onClick={retryCurrentClient}
+                    variant="outline"
+                    disabled={!currentClient || currentDialerClient?.attemptCount >= 3}
+                  >
+                    🔄 Retry
+                  </Button>
+                  <Button
+                    onClick={() => nextClient(true)}
+                    variant="destructive"
+                    className="ml-2"
+                  >
+                    🚨 Force Next
+                  </Button>
+                </div>
 
-                    {/* Control Buttons */}
-                    <div className="flex justify-center space-x-2 pt-2 border-t">
-                      <Button
-                        onClick={pauseDialer}
-                        size="sm"
-                        variant="outline"
-                        title="Pause/Resume dialer (Shortcut: P)"
-                      >
-                        {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
-                        {isPaused ? 'Resume' : 'Pause'}
-                      </Button>
-                      
-                      <Button
-                        onClick={stopDialer}
-                        size="sm"
-                        variant="destructive"
-                        title="Stop dialer and close (Shortcut: Escape)"
-                      >
-                        <PhoneOff className="h-4 w-4 mr-1" />
-                        Stop Dialer
-                      </Button>
-                    </div>
+                {/* Quick Status Buttons */}
+                <div className="flex justify-center space-x-2">
+                  <Button
+                    onClick={() => quickMark('connected')}
+                    size="sm"
+                    className="bg-green-500 hover:bg-green-600"
+                    disabled={isProcessing}
+                  >
+                    ✅ Connected
+                  </Button>
+                  
+                  <Button
+                    onClick={() => quickMark('no-answer')}
+                    size="sm"
+                    className="bg-yellow-500 hover:bg-yellow-600"
+                    disabled={isProcessing}
+                  >
+                    📵 No Answer
+                  </Button>
+                  
+                  <Button
+                    onClick={() => quickMark('busy')}
+                    size="sm"
+                    className="bg-orange-500 hover:bg-orange-600"
+                    disabled={isProcessing}
+                  >
+                    📞 Busy
+                  </Button>
+                  
+                  <Button
+                    onClick={() => quickMark('failed')}
+                    size="sm"
+                    className="bg-red-500 hover:bg-red-600"
+                    disabled={isProcessing}
+                  >
+                    ❌ Failed
+                  </Button>
+                  
+                  <Button
+                    onClick={() => quickMark('skipped')}
+                    size="sm"
+                    variant="outline"
+                    disabled={isProcessing}
+                  >
+                    ⏭️ Skip
+                  </Button>
+                </div>
 
-                    {/* Keyboard Shortcuts Info */}
-                    <div className="text-center text-xs text-gray-500 pt-2 border-t">
-                      <p>Keyboard shortcuts: <kbd className="px-1 py-0.5 bg-gray-200 rounded">S</kbd> Skip • <kbd className="px-1 py-0.5 bg-gray-200 rounded">E</kbd> End Call • <kbd className="px-1 py-0.5 bg-gray-200 rounded">C</kbd> Connected • <kbd className="px-1 py-0.5 bg-gray-200 rounded">N</kbd> No Answer</p>
-                    </div>
-                  </>
-                )}
+                {/* Advanced Actions */}
+                <div className="flex justify-center space-x-2 pt-2 border-t">
+                  <Button
+                    onClick={() => quickMark('no-answer', false)}
+                    size="sm"
+                    variant="outline"
+                    disabled={isProcessing}
+                  >
+                    📧 Voicemail (Stay)
+                  </Button>
+                  
+                  <Button
+                    onClick={() => markAllRemaining('no-answer')}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600"
+                    disabled={isProcessing}
+                  >
+                    🚫 Mark All No-Answer
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Enhanced Client Queue */}
+          {/* Quick Jump Navigation */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Client Queue</span>
-                <Badge variant="secondary" className="text-xs">
-                  {dialerClients.filter(c => c.callStatus === 'waiting').length} waiting
-                </Badge>
-              </CardTitle>
+              <CardTitle className="text-sm">Quick Jump to Client</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {dialerClients.map((dialerClient, index) => {
-                  const isCurrent = index === currentIndex;
-                  const isNext = index === currentIndex + 1;
-                  const isPrevious = index < currentIndex;
-                  
-                  return (
-                    <div
-                      key={dialerClient.client.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
-                        isCurrent 
-                          ? 'bg-blue-50 border-blue-300 shadow-md' 
-                          : isNext 
-                            ? 'bg-yellow-50 border-yellow-200' 
-                            : isPrevious 
-                              ? 'bg-gray-50 border-gray-200 opacity-75' 
-                              : 'bg-white border-gray-100'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                            isCurrent 
-                              ? 'bg-blue-500 text-white' 
-                              : isNext 
-                                ? 'bg-yellow-500 text-white' 
-                                : isPrevious 
-                                  ? 'bg-gray-400 text-white' 
-                                  : 'bg-gray-200 text-gray-600'
-                          }`}>
-                            {index + 1}
-                          </div>
-                          {getStatusIcon(dialerClient.callStatus)}
-                          <span className={`font-medium ${isCurrent ? 'text-blue-800' : isNext ? 'text-yellow-800' : ''}`}>
-                            {dialerClient.client.name}
-                          </span>
-                          <span className="text-sm text-gray-500 font-mono">
-                            {dialerClient.callStatus === 'calling' || (index === currentIndex && isCallInProgress) ? 
-                              blurPhoneNumber(dialerClient.client.phone) : 
-                              dialerClient.client.phone
-                            }
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          {isCurrent && (
-                            <Badge className="bg-blue-100 text-blue-800 text-xs animate-pulse">
-                              CURRENT
-                            </Badge>
-                          )}
-                          {isNext && (
-                            <Badge className="bg-yellow-100 text-yellow-800 text-xs">
-                              NEXT
-                            </Badge>
-                          )}
-                          {dialerClient.attemptTime && (
-                            <span className="text-xs text-gray-500">
-                              {dialerClient.attemptTime.toLocaleTimeString()}
-                            </span>
-                          )}
-                          {dialerClient.twilioCallSid && (
-                            <Badge variant="outline" className="text-xs">
-                              SID: {dialerClient.twilioCallSid.slice(-8)}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <Badge className={`${getStatusColor(dialerClient.callStatus)} text-xs`}>
-                        {dialerClient.callStatus.toUpperCase()}
-                      </Badge>
-                    </div>
-                  );
-                })}
+              <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                {dialerClients.map((dialerClient, index) => (
+                  <Button
+                    key={index}
+                    onClick={() => jumpToClient(index)}
+                    size="sm"
+                    variant={index === currentIndex ? "default" : "outline"}
+                    className={`text-xs ${index === currentIndex ? 'bg-blue-500 text-white' : ''}`}
+                    disabled={isProcessing}
+                  >
+                    {index + 1}
+                    <Badge className="ml-1 text-xs" variant="secondary">
+                      {dialerClient.callStatus === 'waiting' ? '⏳' :
+                       dialerClient.callStatus === 'calling' ? '📞' :
+                       dialerClient.callStatus === 'connected' ? '✅' :
+                       dialerClient.callStatus === 'no-answer' ? '📵' :
+                       dialerClient.callStatus === 'busy' ? '📞' :
+                       dialerClient.callStatus === 'failed' ? '❌' :
+                       dialerClient.callStatus === 'skipped' ? '⏭️' : '⏳'}
+                    </Badge>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Enhanced Keyboard Shortcuts Info */}
+          <Card className="bg-gray-50">
+            <CardContent className="pt-4">
+              <div className="text-xs text-gray-600 space-y-1">
+                <div className="font-medium mb-2">🎯 Enhanced Keyboard Shortcuts:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><kbd>Space</kbd> - Call Current</div>
+                  <div><kbd>H/Esc</kbd> - Hang Up</div>
+                  <div><kbd>→/N</kbd> - Next Client</div>
+                  <div><kbd>←/P</kbd> - Previous Client</div>
+                  <div><kbd>C</kbd> - Connected</div>
+                  <div><kbd>A</kbd> - No Answer</div>
+                  <div><kbd>B</kbd> - Busy</div>
+                  <div><kbd>F</kbd> - Failed</div>
+                  <div><kbd>S</kbd> - Skip</div>
+                  <div><kbd>R</kbd> - Retry</div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
       </DialogContent>
-
-      {/* Quick Action Modals */}
-      <TagsNotesModal
-        isOpen={!!tagsNotesClient}
-        onClose={() => setTagsNotesClient(null)}
-        client={tagsNotesClient!}
-        onUpdate={() => {
-          refreshClientData();
-          setTagsNotesClient(null);
-        }}
-      />
-
-      <ClientEventModal
-        open={!!schedulingClient}
-        onOpenChange={(isOpen) => !isOpen && setSchedulingClient(null)}
-        client={schedulingClient}
-      />
-
-      <QuickReminderModal
-        open={!!reminderClient}
-        onOpenChange={(isOpen) => !isOpen && setReminderClient(null)}
-        client={reminderClient}
-      />
-
-      <EmailModal
-        open={!!emailingClient}
-        onOpenChange={(isOpen) => !isOpen && setEmailingClient(null)}
-        client={emailingClient}
-      />
     </Dialog>
   );
 };
