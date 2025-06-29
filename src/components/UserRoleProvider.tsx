@@ -43,6 +43,7 @@ export const UserRoleProvider = ({ children }: Props) => {
   const [loading, setLoading] = useState(true);
   const [blurEnabled, setBlurEnabled] = useState(false);
   const [authValidated, setAuthValidated] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
   const { 
     userProfile, 
@@ -136,8 +137,11 @@ export const UserRoleProvider = ({ children }: Props) => {
       console.log("🔐 Running authentication validation...");
       const isValid = validateSessionProfile();
       setAuthValidated(isValid);
+      if (isValid && !initialLoadComplete) {
+        setInitialLoadComplete(true);
+      }
     }
-  }, [session, userProfile, authValidated]);
+  }, [session, userProfile, authValidated, initialLoadComplete]);
 
   // Set blur based on user role
   useEffect(() => {
@@ -196,19 +200,20 @@ export const UserRoleProvider = ({ children }: Props) => {
     return <LoginPage />;
   }
 
-  // If user is authenticated but no profile exists yet, show loading
-  if (!userProfile) {
+  // Block rendering only on initial load. After that, render children even if profile is refreshing.
+  if (!initialLoadComplete && !userProfile) {
     return <div className="flex items-center justify-center h-screen">Setting up your account...</div>;
   }
 
-  // If authentication validation is in progress, show a non-blocking indicator instead of replacing the screen
-  if (!authValidated) {
-    // This is a non-blocking state, you might want a small overlay or toast instead
+  // If auth is being re-validated after initial load, don't block rendering
+  if (!authValidated && initialLoadComplete) {
+    console.log("⏳ Re-validating session in background, not blocking UI...");
+  } else if (!authValidated) {
     console.log("⏳ Authentication validation in progress, but not blocking UI...");
   }
 
-  // If user is inactive, show access denied
-  if (!userProfile.is_active) {
+  // If user is inactive, show access denied. Check for profile existence first.
+  if (userProfile && !userProfile.is_active) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
