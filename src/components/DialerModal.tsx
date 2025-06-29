@@ -10,6 +10,10 @@ import { Client } from "@/types/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCallStore } from "@/hooks/useCallStore";
 import { CallLog } from "@/types/call";
+import { TagsNotesModal } from "./TagsNotesModal";
+import { ClientEventModal } from "./calendar/ClientEventModal";
+import { QuickReminderModal } from "./calendar/QuickReminderModal";
+import { EmailModal } from "./EmailModal";
 
 interface DialerModalProps {
   open: boolean;
@@ -124,101 +128,6 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
       action();
     }, delay);
   }, []);
-
-  // Enhanced jump to client with proper call handling
-  const jumpToClient = useCallback(async (index: number) => {
-    if (isProcessing) {
-      console.log('⚠️ Already processing, ignoring jump request');
-      return;
-    }
-    
-    if (index < 0 || index >= dialerClients.length) {
-      console.log('⚠️ Invalid index:', index);
-      return;
-    }
-
-    setIsProcessing(true);
-    
-    console.log(`🎯 Jumping to client ${index + 1}: ${dialerClients[index]?.client.name}`);
-    
-    // Always end call first
-    await safeEndCall();
-    
-    // Save current notes
-    if (notes.trim()) {
-      setQuickNotes(prev => ({
-        ...prev,
-        [currentIndex]: notes
-      }));
-    }
-    
-    // Update index and load notes
-    setCurrentIndex(index);
-    setNotes(quickNotes[index] || "");
-    
-    toast({
-      title: "📍 Jumped to Client",
-      description: `Now on client ${index + 1}: ${dialerClients[index]?.client.name}`,
-    });
-    
-    setIsProcessing(false);
-  }, [isProcessing, dialerClients, currentIndex, notes, quickNotes, safeEndCall, toast]);
-
-  // Navigation functions
-  const jumpBack = useCallback(() => {
-    if (currentIndex > 0) {
-      debounceAction(() => jumpToClient(currentIndex - 1));
-    } else {
-      toast({
-        title: "⚠️ At First Client",
-        description: "Already at the first client",
-      });
-    }
-  }, [currentIndex, jumpToClient, debounceAction, toast]);
-
-  // Enhanced next client function with fallback
-  const nextClient = useCallback(async (force = false) => {
-    if (isProcessing && !force) {
-      toast({
-        title: '⏳ Please Wait',
-        description: 'Still processing previous action. Use Force Next if stuck.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setIsProcessing(true);
-    // End current call if active
-    if (isCallInProgress || force) {
-      await safeEndCall(force);
-      toast({
-        title: '📞 Call Ended',
-        description: 'Moving to next client...',
-      });
-    }
-    // Save current notes
-    if (notes.trim()) {
-      setQuickNotes(prev => ({
-        ...prev,
-        [currentIndex]: notes
-      }));
-    }
-    // Move to next client
-    if (currentIndex < dialerClients.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      setNotes(quickNotes[currentIndex + 1] || "");
-      toast({
-        title: '➡️ Next Client',
-        description: `Now on client ${currentIndex + 2}: ${dialerClients[currentIndex + 1]?.client.name}`,
-      });
-    } else {
-      toast({
-        title: '✅ All Clients Complete',
-        description: "You've reached the end of the client list",
-      });
-      onCallComplete();
-    }
-    setIsProcessing(false);
-  }, [isProcessing, isCallInProgress, safeEndCall, notes, currentIndex, quickNotes, dialerClients, toast, onCallComplete]);
 
   // Enhanced call current client with better state management
   const callCurrentClient = useCallback(async () => {
@@ -776,6 +685,35 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
           </Card>
         </div>
       </DialogContent>
+
+      {/* Quick Action Modals */}
+      <TagsNotesModal
+        isOpen={!!tagsNotesClient}
+        onClose={() => setTagsNotesClient(null)}
+        client={tagsNotesClient!}
+        onUpdate={() => {
+          refreshClientData();
+          setTagsNotesClient(null);
+        }}
+      />
+
+      <ClientEventModal
+        open={!!schedulingClient}
+        onOpenChange={(isOpen) => !isOpen && setSchedulingClient(null)}
+        client={schedulingClient}
+      />
+
+      <QuickReminderModal
+        open={!!reminderClient}
+        onOpenChange={(isOpen) => !isOpen && setReminderClient(null)}
+        client={reminderClient}
+      />
+
+      <EmailModal
+        open={!!emailingClient}
+        onOpenChange={(isOpen) => !isOpen && setEmailingClient(null)}
+        client={emailingClient}
+      />
     </Dialog>
   );
 };
