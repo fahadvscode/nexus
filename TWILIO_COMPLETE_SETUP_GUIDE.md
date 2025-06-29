@@ -40,14 +40,14 @@ This document contains the complete, tested, and WORKING configuration for Twili
 ### Twilio Account Credentials ✅ ACTIVE
 - **Account Name**: CUSTOM CRM
 - **Account Status**: Active Full Account  
-- **Account SID**: `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-- **TwiML App SID**: `APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- **Account SID**: [REDACTED]
+- **TwiML App SID**: [REDACTED]
 - **Console Access**: https://console.twilio.com/
 - **Account Email**: (Same as main account)
 
 ### API Key Authentication (SECURE METHOD) ✅ WORKING
-- **API Key SID**: `SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-- **API Key Secret**: `your_api_key_secret_here`
+- **API Key SID**: [REDACTED]
+- **API Key Secret**: [REDACTED]
 
 > **Why API Keys?** More secure than Auth Tokens and required for proper JWT signature validation.
 
@@ -67,12 +67,12 @@ This document contains the complete, tested, and WORKING configuration for Twili
 Set these in Supabase Dashboard → Settings → Environment Variables:
 
 ```bash
-TWILIO_ACCOUNT_SID = ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_API_KEY_SID = SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_API_KEY_SECRET = your_api_key_secret_here
-TWILIO_AUTH_TOKEN = your_auth_token_here
-TWIML_APP_SID = APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-TWILIO_PHONE_NUMBER = +1xxxxxxxxxx
+TWILIO_ACCOUNT_SID = [REDACTED]
+TWILIO_API_KEY_SID = [REDACTED]
+TWILIO_API_KEY_SECRET = [REDACTED]
+TWILIO_AUTH_TOKEN = [REDACTED]
+TWIML_APP_SID = [REDACTED]
+TWILIO_PHONE_NUMBER = [REDACTED]
 ```
 
 ## 🚀 PRODUCTION DEPLOYMENT ✅ LIVE
@@ -207,11 +207,11 @@ const result = await response.json()
 - **SMS History**: Database logging of all messages
 
 ### Phone Numbers Available
-- **SMS Number**: `+1 (289) 301-8284` - SMS + Voice capable ✅ ACTIVE
-- **Alternative**: `+1 (579) 999-5880` - SMS + Voice capable  
-- **Legacy Voice**: `+1 (833) 965-2145` - Voice only (not SMS capable)
+- **SMS Number**: [REDACTED] - SMS + Voice capable ✅ ACTIVE
+- **Alternative**: [REDACTED] - SMS + Voice capable  
+- **Legacy Voice**: [REDACTED] - Voice only (not SMS capable)
 - **Status**: All numbers active and verified
-- **Current Config**: Using ***REMOVED*** for both voice and SMS
+- **Current Config**: Using [REDACTED] for both voice and SMS
 
 ## 🛠️ TROUBLESHOOTING GUIDE
 
@@ -360,9 +360,9 @@ npx vercel --prod --yes --force
 
 #### 4. Twilio Console Access  
 - **URL**: https://console.twilio.com/
-- **Account SID**: ***REMOVED***
+- **Account SID**: [REDACTED]
 - **Navigate to**: Voice → TwiML → TwiML Apps
-- **App SID**: ***REMOVED***
+- **App SID**: [REDACTED]
 
 #### 5. Vercel Dashboard Access
 - **URL**: https://vercel.com/fahadjaveds-projects/client-shield-crm-main
@@ -392,13 +392,13 @@ If everything is already configured:
 ### 🔧 DEVELOPMENT ACCESS  
 - **Supabase**: https://supabase.com/dashboard/project/ipizfawpzzwdltcbskim
 - **Vercel**: https://vercel.com/fahadjaveds-projects/client-shield-crm-main
-- **Twilio**: https://console.twilio.com/ (Account: ***REMOVED***)
+- **Twilio**: https://console.twilio.com/ (Account: [REDACTED])
 
 ### 🔑 API CREDENTIALS
-- **Twilio Account SID**: `***REMOVED***`
-- **API Key SID**: `***REMOVED***`
-- **API Key Secret**: `***REMOVED***`
-- **TwiML App SID**: `***REMOVED***`
+- **Twilio Account SID**: [REDACTED]
+- **API Key SID**: [REDACTED]
+- **API Key Secret**: [REDACTED]
+- **TwiML App SID**: [REDACTED]
 
 ---
 

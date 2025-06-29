@@ -31,7 +31,7 @@ serve(async (req) => {
     // Create bulletproof TwiML response with required callerId
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Dial callerId="***REMOVED***" timeout="30" timeLimit="3600">
+    <Dial callerId="+12893018284" timeout="30" timeLimit="3600">
         <Number>${to}</Number>
     </Dial>
 </Response>`

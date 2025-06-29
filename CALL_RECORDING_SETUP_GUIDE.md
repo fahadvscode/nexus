@@ -175,12 +175,12 @@ CREATE TABLE communication_history (
 
 ### Environment Variables
 All existing Twilio credentials remain the same:
-- `TWILIO_ACCOUNT_SID`: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-- `TWILIO_AUTH_TOKEN`: your_auth_token_here
-- `TWILIO_API_KEY_SID`: SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-- `TWILIO_API_KEY_SECRET`: your_api_key_secret_here
-- `TWILIO_PHONE_NUMBER`: +1xxxxxxxxxx
-- `TWIML_APP_SID`: APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+- `TWILIO_ACCOUNT_SID`: [REDACTED]
+- `TWILIO_AUTH_TOKEN`: [REDACTED]
+- `TWILIO_API_KEY_SID`: [REDACTED]
+- `TWILIO_API_KEY_SECRET`: [REDACTED]
+- `TWILIO_PHONE_NUMBER`: [REDACTED]
+- `TWIML_APP_SID`: [REDACTED]
 
 ## Deployment Status
 

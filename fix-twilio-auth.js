@@ -9,10 +9,10 @@ async function generateTwilioCompatibleJWT() {
   console.log('🔧 Generating Twilio-compatible JWT token using API Key authentication...');
   
   // Twilio credentials - using API Key approach
-  const accountSid = '***REMOVED***';
-  const apiKeySid = '***REMOVED***';
-  const apiKeySecret = '***REMOVED***';
-  const twimlAppSid = '***REMOVED***';
+  const accountSid = '[REDACTED]';
+  const apiKeySid = '[REDACTED]';
+  const apiKeySecret = '[REDACTED]';
+  const twimlAppSid = '[REDACTED]';
   
   // Generate a token with the correct structure for API Key auth
   const identity = 'test@example.com';

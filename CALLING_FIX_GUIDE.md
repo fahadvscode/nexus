@@ -19,7 +19,7 @@ The "Application Error" typically occurs due to **Twilio Console configuration i
 
 ### 2. Required Twilio Console Configuration
 
-#### TwiML App Configuration (***REMOVED***)
+#### TwiML App Configuration (AP9439d3ce3b273cb6e5b7f686bf492556)
 ```
 Voice Configuration:
 - Voice URL: https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/handle-voice
@@ -31,12 +31,12 @@ Messaging Configuration:
 - Request URL: (leave empty - not used for voice)
 ```
 
-#### Phone Number Configuration (***REMOVED***)
+#### Phone Number Configuration (+12893018284)
 ```
 Voice & Fax:
 - Accept Incoming: Voice Calls
 - Configure With: TwiML App
-- TwiML App: ***REMOVED***
+- TwiML App: AP9439d3ce3b273cb6e5b7f686bf492556
 
 Messaging:
 - Configure With: Webhook
@@ -48,16 +48,16 @@ Messaging:
 
 ### Step 1: Verify TwiML App Webhook
 1. Go to Twilio Console → Develop → TwiML Apps
-2. Find TwiML App: `***REMOVED***`
+2. Find TwiML App: `AP9439d3ce3b273cb6e5b7f686bf492556`
 3. Ensure Voice URL is EXACTLY: `https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/handle-voice`
 4. Ensure HTTP Method is `POST`
 
 ### Step 2: Verify Phone Number Association
 1. Go to Twilio Console → Phone Numbers → Manage → Active Numbers
-2. Find phone number: `***REMOVED***`
+2. Find phone number: `+12893018284`
 3. In Voice & Fax section:
    - Set "Configure With" to "TwiML App"
-   - Select TwiML App: `***REMOVED***`
+   - Select TwiML App: `AP9439d3ce3b273cb6e5b7f686bf492556`
 4. Save configuration
 
 ### Step 3: Test Webhook Accessibility
@@ -142,13 +142,13 @@ Once basic calling works, switch back to our custom webhook for full functionali
 
 **Root Cause**: The TwiML `<Dial>` element was missing the required `callerId` attribute.
 
-**Solution Applied**: Added `callerId="***REMOVED***"` to the Dial element in voice handler.
+**Solution Applied**: Added `callerId="+12893018284"` to the Dial element in voice handler.
 
 ### Updated TwiML Response:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Dial callerId="***REMOVED***" timeout="30" timeLimit="3600">
+    <Dial callerId="+12893018284" timeout="30" timeLimit="3600">
         <Number>${to}</Number>
     </Dial>
 </Response>

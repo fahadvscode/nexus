@@ -3,8 +3,8 @@
 
 // Mock token generation based on the same logic as Supabase function
 function generateMockToken() {
-  const accountSid = '***REMOVED***';
-  const twimlAppSid = '***REMOVED***';
+  const accountSid = '[REDACTED]';
+  const twimlAppSid = '[REDACTED]';
   
   // Generate payload similar to what the Supabase function does
   const now = Math.floor(Date.now() / 1000);
