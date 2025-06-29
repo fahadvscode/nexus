@@ -18,7 +18,7 @@ function App() {
             <AppRoutes />
             <Toaster />
             <Sonner />
-            {import.meta.env.DEV && <DebugInfo />}
+            <DebugInfo />
           </UserRoleProvider>
         </Router>
       </TooltipProvider>

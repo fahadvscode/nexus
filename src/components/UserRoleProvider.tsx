@@ -120,10 +120,14 @@ export const UserRoleProvider = ({ children }: Props) => {
     };
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("🔄 Auth state change:", _event, session?.user?.email);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("🔄 Auth state change:", event, session?.user?.email);
       setSession(session);
-      setAuthValidated(false); // Reset validation on auth change
+      // Only reset validation on major auth events, not on token refresh
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        console.log(`🚀 Major auth event: ${event}. Resetting validation.`);
+        setAuthValidated(false);
+      }
     });
 
     return () => {
