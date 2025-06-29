@@ -9,54 +9,90 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJh
 // Service role key for admin operations (get this from your Supabase project settings -> API)
 const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 
-// Create singleton instances to prevent multiple GoTrueClient instances
-let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
-let supabaseAdminInstance: ReturnType<typeof createClient<Database>> | null = null;
-
-// Regular client for normal operations - singleton pattern
-export const supabase = (() => {
-  if (!supabaseInstance) {
-    supabaseInstance = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        storage: localStorage,
-        storageKey: 'sb-shield-crm-auth', // Use unique storage key to prevent conflicts
-        detectSessionInUrl: true,
-        flowType: 'pkce'
-      },
-      global: {
-        headers: {
-          'x-application-name': 'shield-crm',
-          'x-client-info': 'shield-crm-v1.0'
-        }
-      }
-    });
+// Global singleton to completely prevent multiple GoTrueClient instances
+declare global {
+  interface Window {
+    __SHIELD_CRM_SUPABASE__?: ReturnType<typeof createClient<Database>>;
+    __SHIELD_CRM_SUPABASE_ADMIN__?: ReturnType<typeof createClient<Database>>;
   }
-  return supabaseInstance;
+}
+
+// Regular client for normal operations - ULTRA-STRICT global singleton
+export const supabase = (() => {
+  // IMMEDIATE check - prevent any duplication
+  if (typeof window !== 'undefined') {
+    if (window.__SHIELD_CRM_SUPABASE__) {
+      console.log('🔄 Reusing existing Supabase client instance');
+      return window.__SHIELD_CRM_SUPABASE__;
+    }
+  }
+  
+  console.log('🆕 Creating new Supabase client instance');
+  
+  const instance = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storage: localStorage,  
+      storageKey: 'sb-shield-crm-auth-v5', // Latest version to clear conflicts
+      detectSessionInUrl: true,
+      flowType: 'pkce'
+    },
+    global: {
+      headers: {
+        'x-application-name': 'shield-crm-v5',
+        'x-client-info': 'shield-crm-ultra-singleton',
+        'x-timestamp': Date.now().toString()
+      }
+    },
+    // Optimize realtime settings
+    realtime: {
+      params: {
+        eventsPerSecond: 1 // Reduce to minimum
+      }
+    }
+  });
+  
+  // Store in global location to prevent duplication
+  if (typeof window !== 'undefined') {
+    window.__SHIELD_CRM_SUPABASE__ = instance;
+    console.log('✅ Supabase client stored globally');
+  }
+  
+  return instance;
 })();
 
-// Admin client for server-side operations (creating users, etc.) - singleton pattern
+// Admin client for server-side operations - strict global singleton  
 export const supabaseAdmin = (() => {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     console.warn('VITE_SUPABASE_SERVICE_ROLE_KEY not set - admin operations will not work');
     return null;
   }
   
-  if (!supabaseAdminInstance) {
-    supabaseAdminInstance = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      },
-      global: {
-        headers: {
-          'x-application-name': 'shield-crm-admin'
-        }
-      }
-    });
+  // If already exists in window, return it immediately
+  if (typeof window !== 'undefined' && window.__SHIELD_CRM_SUPABASE_ADMIN__) {
+    return window.__SHIELD_CRM_SUPABASE_ADMIN__;
   }
-  return supabaseAdminInstance;
+  
+  const adminInstance = createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    },
+    global: {
+      headers: {
+        'x-application-name': 'shield-crm-admin-v3',
+        'x-client-info': 'shield-crm-admin-singleton'
+      }
+    }
+  });
+  
+  // Store globally to prevent multiple instances
+  if (typeof window !== 'undefined') {
+    window.__SHIELD_CRM_SUPABASE_ADMIN__ = adminInstance;
+  }
+  
+  return adminInstance;
 })();
 
 // Export utility functions for better error handling

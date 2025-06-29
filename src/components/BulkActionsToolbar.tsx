@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import {
 import { Trash2, Tag, UserCheck, X, CheckCircle, Download, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { clientStore } from "@/store/clientStore";
+import { supabase } from "@/integrations/supabase/client";
 import { exportClientsToCSV } from "@/utils/csvExport";
 import { EmailModal } from "@/components/EmailModal";
 
@@ -59,12 +60,15 @@ export const BulkActionsToolbar = ({ selectedCount, selectedIds, onClearSelectio
 
     setIsProcessing(true);
     try {
-      const clients = clientStore.getAllClients();
-      const remainingClients = clients.filter(client => !selectedIds.includes(client.id));
-      
-      // Update the store with remaining clients
-      localStorage.setItem('nexus-crm-clients', JSON.stringify(remainingClients));
-      window.dispatchEvent(new CustomEvent('clientsUpdated'));
+      // Delete clients one by one using Supabase directly
+      for (const clientId of selectedIds) {
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientId);
+          
+        if (error) throw error;
+      }
       
       toast({
         title: "Clients Deleted",
@@ -90,15 +94,18 @@ export const BulkActionsToolbar = ({ selectedCount, selectedIds, onClearSelectio
 
     setIsProcessing(true);
     try {
-      selectedIds.forEach(clientId => {
-        const clients = clientStore.getAllClients();
-        const client = clients.find(c => c.id === clientId);
+      // Get all clients first
+      const allClients = await clientStore.getAllClients();
+      
+      // Process each selected client
+      for (const clientId of selectedIds) {
+        const client = allClients.find(c => c.id === clientId);
         if (client && !client.tags.includes(tag.trim())) {
-          clientStore.updateClient(clientId, { 
+          await clientStore.updateClient(clientId, { 
             tags: [...client.tags, tag.trim()] 
           });
         }
-      });
+      }
       
       toast({
         title: "Tag Added",
@@ -121,7 +128,7 @@ export const BulkActionsToolbar = ({ selectedCount, selectedIds, onClearSelectio
   const handleBulkExport = async () => {
     setIsProcessing(true);
     try {
-      const allClients = clientStore.getAllClients();
+      const allClients = await clientStore.getAllClients();
       const selectedClients = allClients.filter(client => selectedIds.includes(client.id));
       
       const timestamp = new Date().toISOString().split('T')[0];
@@ -144,7 +151,21 @@ export const BulkActionsToolbar = ({ selectedCount, selectedIds, onClearSelectio
     }
   };
 
-  const selectedClients = clientStore.getAllClients().filter(client => selectedIds.includes(client.id));
+  // Get selected clients for email modal - use useState and useEffect to handle async
+  const [selectedClients, setSelectedClients] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const getSelectedClients = async () => {
+      if (selectedIds.length > 0) {
+        const allClients = await clientStore.getAllClients();
+        setSelectedClients(allClients.filter(client => selectedIds.includes(client.id)));
+      } else {
+        setSelectedClients([]);
+      }
+    };
+    
+    getSelectedClients();
+  }, [selectedIds]);
 
   return (
     <>
