@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useTwilioStore } from "@/hooks/useTwilioStore";
 import { Client } from "@/types/client";
 import { useToast } from "@/hooks/use-toast";
-import { CallLog, CallOutcome } from "@/types/call";
-import { useCallStore } from "@/store/callStore";
+import { CallLog } from "@/types/call";
+import { useCallStore } from "@/hooks/useCallStore";
 import { Progress } from "@/components/ui/progress";
 
 interface DialerModalProps {
@@ -19,9 +19,11 @@ interface DialerModalProps {
   onCallComplete: () => void;
 }
 
+type DialerStatus = CallLog['outcome'] | 'waiting' | 'calling' | 'skipped';
+
 interface DialerClient {
   client: Client;
-  callStatus: CallOutcome | 'waiting' | 'calling' | 'skipped';
+  callStatus: DialerStatus;
   notes: string;
 }
 
@@ -36,12 +38,16 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
   const { toast } = useToast();
   const prevIsCallInProgress = useRef(isCallInProgress);
 
-  const handleNext = useCallback(async (isSkipping = false) => {
+  const endCurrentCall = useCallback(() => {
+    console.log(`📞 Attempting to end call. isCallInProgress: ${isCallInProgress}`);
     if (isCallInProgress) {
       hangupCall();
-      await new Promise(resolve => setTimeout(resolve, 250)); // Shorter wait
+    } else {
+      toast({ title: "No Active Call", description: "There is no active call to end.", variant: "destructive" });
     }
-    
+  }, [isCallInProgress, hangupCall, toast]);
+
+  const handleNext = useCallback(async (isSkipping = false) => {
     if (currentIndex < dialerClients.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setNotes("");
@@ -50,26 +56,37 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
       onOpenChange(false);
       onCallComplete();
     }
-  }, [isCallInProgress, hangupCall, currentIndex, dialerClients.length, onOpenChange, onCallComplete, toast]);
+  }, [currentIndex, dialerClients.length, onOpenChange, onCallComplete, toast]);
 
-  const markCallComplete = useCallback(async (status: CallOutcome) => {
+  const markCallComplete = useCallback(async (status: CallLog['outcome']) => {
     const client = dialerClients[currentIndex]?.client;
     if (!client) return;
 
     const callLog: Omit<CallLog, 'id'> = {
-        clientId: client.id, // Corrected field name
+        clientId: client.id,
+        clientName: client.name,
+        phoneNumber: client.phone,
+        startTime: new Date(Date.now() - (callDuration * 1000)),
+        endTime: new Date(),
         outcome: status,
         notes: notes,
         duration: callDuration,
-        call_sid: activeCall?.parameters.CallSid || null,
-        created_at: new Date().toISOString()
+        twilioCallSid: activeCall?.parameters.CallSid || undefined,
+        followUpRequired: false,
+        createdBy: 'user_id_placeholder', // Replace with actual user ID
     };
     addCall(callLog);
+    
+    if (isCallInProgress) {
+      hangupCall();
+      // Wait for the call to actually terminate before moving on
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     
     setDialerClients(prev => prev.map((c, i) => i === currentIndex ? { ...c, callStatus: status } : c));
     toast({ title: "Call Marked", description: `Status set to ${status}` });
     handleNext();
-  }, [currentIndex, dialerClients, notes, callDuration, activeCall, addCall, toast, handleNext]);
+  }, [currentIndex, dialerClients, notes, callDuration, activeCall, addCall, toast, handleNext, isCallInProgress, hangupCall]);
 
   const startCall = useCallback(() => {
     const clientToCall = dialerClients[currentIndex]?.client;
@@ -154,8 +171,15 @@ export const DialerModal = ({ open, onOpenChange, clients, onCallComplete }: Dia
         )}
 
         <DialogFooter className="mt-4 flex-shrink-0">
-            <Button onClick={() => handleNext(true)} variant="destructive">
-                {isCallInProgress ? 'End Call & Next' : 'Skip Client'}
+            <Button 
+              onClick={isCallInProgress ? endCurrentCall : () => handleNext(true)} 
+              variant="destructive"
+              disabled={!isReady && isCallInProgress}
+            >
+                {isCallInProgress ? 'End Call' : 'Skip Client'}
+            </Button>
+            <Button onClick={() => handleNext(false)} disabled={isCallInProgress}>
+              Next Client
             </Button>
             <Button onClick={() => setIsPaused(!isPaused)} variant="secondary">
                 {isPaused ? 'Resume Dialer' : 'Pause Dialer'}
