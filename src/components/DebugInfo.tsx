@@ -1,62 +1,121 @@
-import React from 'react';
+import { useTwilioStore } from '../hooks/useTwilioStore';
 import { useUserRole } from './UserRoleProvider';
-import { Badge } from '@/components/ui/badge';
 
 const DebugInfo = () => {
-  const { userProfile, session, userRole, isAdmin } = useUserRole();
+  const {
+    isCallInProgress,
+    callStatus,
+    activeCall,
+    device,
+    isInitializing,
+    error: twilioError,
+  } = useTwilioStore();
 
-  // Enhanced debugging information
-  const debugInfo = {
-    sessionEmail: session?.user?.email || 'No session',
-    profileEmail: userProfile?.email || 'No profile',
-    profileRole: userProfile?.role || 'No role',
-    userRoleVar: userRole,
-    isAdminResult: isAdmin(),
-    sessionUserId: session?.user?.id || 'No session ID',
-    profileUserId: userProfile?.user_id || 'No profile user ID',
-    isActive: userProfile?.is_active,
-    timestamp: new Date().toLocaleTimeString()
+  const { getActiveProfile } = useUserRole();
+  const userProfile = getActiveProfile();
+
+  const styles: { [key: string]: React.CSSProperties } = {
+    container: {
+      position: 'fixed',
+      bottom: '10px',
+      right: '10px',
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      color: 'white',
+      padding: '15px',
+      borderRadius: '8px',
+      zIndex: 9999,
+      fontSize: '12px',
+      fontFamily: 'monospace',
+      maxWidth: '400px',
+      maxHeight: '90vh',
+      overflowY: 'auto',
+      border: '1px solid #444',
+    },
+    header: {
+      fontSize: '16px',
+      fontWeight: 'bold',
+      marginBottom: '10px',
+      borderBottom: '1px solid #444',
+      paddingBottom: '5px',
+      color: '#00ff00',
+    },
+    section: {
+      marginBottom: '10px',
+    },
+    sectionTitle: {
+      fontWeight: 'bold',
+      color: '#00ffff',
+      marginBottom: '5px',
+    },
+    pre: {
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-all',
+      backgroundColor: '#111',
+      padding: '5px',
+      borderRadius: '4px',
+    },
+    value: {
+        color: '#ffc107',
+    },
+    booleanTrue: {
+        color: '#28a745',
+        fontWeight: 'bold',
+    },
+    booleanFalse: {
+        color: '#dc3545',
+    },
   };
+  
+  const renderValue = (key: string, value: any) => {
+    const isBoolean = typeof value === 'boolean';
+    let displayValue;
+    let style = styles.value;
+
+    if (isBoolean) {
+        displayValue = value ? 'true' : 'false';
+        style = value ? styles.booleanTrue : styles.booleanFalse;
+    } else if (value === null || value === undefined) {
+        displayValue = 'null';
+    } else if (typeof value === 'object') {
+        displayValue = JSON.stringify(value, null, 2);
+    } else {
+        displayValue = String(value);
+    }
+
+    return (
+        <div>
+            <span>{key}: </span>
+            <span style={style}>{displayValue}</span>
+        </div>
+    )
+  }
 
   return (
-    <div className="fixed bottom-4 right-4 bg-black text-white p-3 rounded-lg shadow-lg z-50 max-w-sm text-xs">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-orange-400 font-bold">🐞 Enhanced Debug Panel</span>
-        <Badge variant={isAdmin() ? 'default' : 'secondary'} className="text-xs">
-          {isAdmin() ? 'ADMIN' : 'SUBACCOUNT'}
-        </Badge>
-      </div>
+    <div style={styles.container}>
+      <div style={styles.header}>🐞 Debug Info</div>
       
-      <div className="space-y-1">
-        <div><strong>Session Email:</strong> {debugInfo.sessionEmail}</div>
-        <div><strong>Profile Email:</strong> {debugInfo.profileEmail}</div>
-        <div><strong>Profile Role:</strong> 
-          <span className={`ml-1 px-1 rounded ${userProfile?.role === 'admin' ? 'bg-green-600' : 'bg-blue-600'}`}>
-            {debugInfo.profileRole}
-          </span>
-        </div>
-        <div><strong>User Role Var:</strong> {debugInfo.userRoleVar}</div>
-        <div><strong>Is Admin?:</strong> 
-          <span className={`ml-1 ${isAdmin() ? 'text-green-400' : 'text-blue-400'}`}>
-            {isAdmin() ? '✅ Yes' : '❌ No'}
-          </span>
-        </div>
-        <div><strong>Active:</strong> 
-          <span className={`ml-1 ${userProfile?.is_active ? 'text-green-400' : 'text-red-400'}`}>
-            {userProfile?.is_active ? '✅ Yes' : '❌ No'}
-          </span>
-        </div>
-        <div><strong>Session ID:</strong> {debugInfo.sessionUserId?.substring(0, 8)}...</div>
-        <div><strong>Profile ID:</strong> {debugInfo.profileUserId?.substring(0, 8)}...</div>
-        <div className="text-gray-400 text-xs mt-2">Updated: {debugInfo.timestamp}</div>
-        
-        {/* Session/Profile Mismatch Warning */}
-        {debugInfo.sessionEmail !== debugInfo.profileEmail && (
-          <div className="bg-red-600 text-white px-2 py-1 rounded mt-2">
-            ⚠️ SESSION MISMATCH!
-          </div>
-        )}
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>User Info</div>
+        {renderValue('Email', userProfile?.email)}
+        {renderValue('Role', userProfile?.role)}
+        {renderValue('Is Active', userProfile?.is_active)}
       </div>
+
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Twilio Store</div>
+        {renderValue('isCallInProgress', isCallInProgress)}
+        {renderValue('callStatus', callStatus)}
+        {renderValue('isInitializing', isInitializing)}
+        {renderValue('Device Ready', !!device)}
+        {renderValue('Twilio Error', twilioError)}
+      </div>
+
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>Active Call Details</div>
+        {renderValue('Active Call Object', activeCall ? 'Exists' : 'null')}
+        {activeCall && <pre style={styles.pre}>{JSON.stringify({ sid: (activeCall as any).parameters?.CallSid, status: activeCall.status() }, null, 2)}</pre>}
+      </div>
+
     </div>
   );
 };

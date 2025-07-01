@@ -3,7 +3,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
-// FORCE FRESH DEPLOYMENT v5 - JWT WITH NBF FIELD - June 24, 2025
+// FORCE FRESH DEPLOYMENT v6 - JWT WITH API KEY AUTH - June 25, 2025
 
 export interface CallOptions {
   phoneNumber: string;
@@ -72,8 +72,9 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     const { activeCall, isConnecting } = get();
     return activeCall ? 'connected' : isConnecting ? 'calling' : 'idle';
   },
-  get isCallInProgress() { 
+  get isCallInProgress() {
     const { activeCall, isConnecting } = get();
+    // A call is in progress if we have an active call object OR if we are in the connecting state.
     return !!activeCall || isConnecting;
   },
 
@@ -116,7 +117,7 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       }
 
       console.log('🔄 Fetching Twilio token...');
-      console.log('🔧 DEBUG: Force fresh deployment with JWT fix - June 24, 2025 v5 - NBF FIELD INCLUDED');
+      console.log('🔧 DEBUG: Force fresh deployment with API KEY AUTH - June 25, 2025 v6');
       console.log('🔐 Using session for user:', activeSession.user?.email);
       console.log('🔐 Session expires at:', new Date(activeSession.expires_at! * 1000).toISOString());
       console.log('🔐 Token preview:', activeSession.access_token.substring(0, 50) + '...');
@@ -124,12 +125,15 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
       // Try direct fetch instead of supabase.functions.invoke
       console.log('🔄 Making direct fetch request...');
       const timestamp = Date.now();
-      const response = await fetch(`https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token?t=${timestamp}`, {
+      const cacheBuster = `t=${timestamp}&v=6`;
+      const response = await fetch(`https://ipizfawpzzwdltcbskim.supabase.co/functions/v1/get-twilio-token?${cacheBuster}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${activeSession.access_token}`,
           'Content-Type': 'application/json',
           'x-application-name': 'nexus-crm',
+          'cache-control': 'no-cache, no-store',
+          'x-deploy-version': 'v6-api-key-auth',
         },
       });
       
@@ -355,9 +359,14 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   setupCallEventHandlers: (call: Call) => {
-    call.on('accept', () => {
-      console.log('✅ Call accepted');
-      set({ isConnecting: false });
+    call.on('accept', (acceptedCall) => {
+      console.log('✅ Call accepted, starting timer');
+      if (callTimer) clearInterval(callTimer);
+      callTimer = startCallTimer(set);
+      set({ 
+        activeCall: acceptedCall,
+        isConnecting: false 
+      });
       toast({
         title: "Call Connected",
         description: "Call is now active",
@@ -365,7 +374,9 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
     });
 
     call.on('disconnect', () => {
-      console.log('📞 Call disconnected');
+      console.log('📞 Call disconnected, stopping timer');
+      if (callTimer) clearInterval(callTimer);
+      callTimer = null;
       set({ 
         activeCall: null,
         isConnecting: false,
@@ -429,113 +440,60 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   makeCall: async ({ phoneNumber, clientName, clientId }: CallOptions) => {
-    const { isReady, error, activeCall, device } = get();
+    const { isReady, isCallInProgress, device } = get();
     
-    console.log('🚀 makeCall called with:', { phoneNumber, clientName, clientId, isReady, error });
-    
+    console.log('🚀 makeCall called with:', { phoneNumber, clientName, isReady });
+
     if (!isReady) {
       const errorMsg = 'Calling device not ready. Please wait for initialization.';
-      console.log('❌ Device not ready:', errorMsg);
-      set({ error: errorMsg });
-      toast({
-        title: "Device Not Ready",
-        description: errorMsg,
-        variant: "destructive",
-      });
+      toast({ title: "Device Not Ready", description: errorMsg, variant: "destructive" });
       return;
     }
 
-    if (!phoneNumber) {
-      const errorMsg = 'Phone number is required';
-      set({ error: errorMsg });
-      toast({
-        title: "Error",
-        description: errorMsg,
-        variant: "destructive",
-      });
+    if (isCallInProgress) {
+      const errorMsg = 'Another call is already in progress.';
+      toast({ title: "Call In Progress", description: errorMsg, variant: "destructive" });
       return;
     }
 
-    if (activeCall) {
-      const errorMsg = 'Another call is already in progress';
-      set({ error: errorMsg });
-      toast({
-        title: "Call In Progress",
-        description: errorMsg,
-        variant: "destructive",
-      });
-      return;
-    }
+    set({ 
+      isConnecting: true, 
+      isCallInProgress: true, // Lock state immediately
+      callStatus: 'calling',
+      error: null,
+      callDuration: 0 
+    });
 
     try {
-      set({ 
-        error: null,
-        isConnecting: true,
-        callDuration: 0 
-      });
-      
       console.log(`📞 Making call to ${phoneNumber} for client: ${clientName || 'Unknown'}`);
       
-      // Clean phone number
       let cleanNumber = phoneNumber.replace(/[^\d+]/g, '');
       if (!cleanNumber.startsWith('+')) {
         cleanNumber = '+1' + cleanNumber;
       }
 
-      // Check if we have a real Twilio device
       if (device) {
-        // Real Twilio call
-        try {
-          console.log('🔄 Attempting real Twilio call...');
-          
-          // Ensure audio permissions are granted before making the call
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              }
-            });
-            console.log('🎤 Audio permissions confirmed for call');
-            // Stop the stream immediately since Twilio will acquire its own
-            stream.getTracks().forEach(track => track.stop());
-          } catch (audioError) {
-            console.error('❌ Audio permission error before call:', audioError);
-            throw new Error(`Microphone access required: ${audioError.message}`);
-          }
-          
-          const call = await device.connect({
-            params: {
-              To: cleanNumber,
-              ClientName: clientName || 'Unknown Client',
-              ClientId: clientId || 'unknown'
-            }
-          });
+        console.log('🔄 Attempting real Twilio call...');
+        const call = await device.connect({
+          params: { To: cleanNumber, ClientName: clientName || 'Unknown Client', ClientId: clientId || 'unknown' }
+        });
 
-          set({ activeCall: call });
-          get().setupCallEventHandlers(call);
-
-          toast({
-            title: "Call Initiated",
-            description: `Making Twilio call to ${clientName || phoneNumber}`,
-          });
-
-          console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
-        } catch (twilioError: any) {
-          console.error('❌ Real Twilio call failed:', twilioError.message);
-          throw new Error(`Call failed: ${twilioError.message}`);
-        }
+        set({ activeCall: call });
+        get().setupCallEventHandlers(call);
+        
+        toast({ title: "Call Initiating", description: `Calling ${clientName || phoneNumber}` });
+        console.log('✅ Real Twilio call initiated successfully:', call.parameters?.CallSid || 'unknown');
       } else {
-        // No device available - throw error instead of demo mode
-        throw new Error('Twilio device not available. Please wait for initialization or check configuration.');
+        throw new Error('Twilio device not available.');
       }
       
     } catch (err: any) {
       console.error('❌ Call failed:', err);
       set({ 
         error: err.message || 'Failed to make call',
-        isConnecting: false 
+        isConnecting: false,
+        isCallInProgress: false, // Reset state on failure
+        callStatus: 'idle'
       });
       
       toast({
@@ -547,14 +505,31 @@ export const useTwilioStore = create<TwilioStore>((set, get) => ({
   },
 
   hangupCall: () => {
-    const { activeCall } = get();
+    const { activeCall, device } = get();
+    console.log('🔴 HANGUP CALL - Attempting to disconnect...');
+    
     if (activeCall) {
-      console.log('📞 Ending call...');
+      console.log('📞 Active call object found. Disconnecting...');
       activeCall.disconnect();
+    } else if (device) {
+      console.log('⚠️ No active call, but device exists. Disconnecting all calls on device.');
+      device.disconnectAll();
+    } else {
+      console.log('🤷 No active call or device to disconnect.');
     }
+
+    // Forcefully reset the state to ensure a clean slate
+    set({
+      activeCall: null,
+      isConnecting: false,
+      callDuration: 0,
+    });
   },
 
-  endCall: () => get().hangupCall(),
+  endCall: () => {
+    console.log('🔴 END CALL - Calling hangupCall');
+    get().hangupCall();
+  },
 
   muteCall: () => {
     const { activeCall, isMuted } = get();

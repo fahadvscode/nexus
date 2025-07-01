@@ -184,11 +184,11 @@ const BulkLeadAssignment = () => {
               <p><strong>Subaccount profiles:</strong> {allProfiles.filter(p => p.role === 'subaccount').length}</p>
               
               {allOrganizations.length === 0 && (
-                <p className="text-red-600">⚠️ No organizations data loaded. Check the debug panel in Settings → Users tab.</p>
+                <p className="text-red-600">⚠️ No organizations data loaded. Please check your connection and try refreshing.</p>
               )}
               
               {allProfiles.length === 0 && (
-                <p className="text-red-600">⚠️ No user profiles data loaded. Check the debug panel in Settings → Users tab.</p>
+                <p className="text-red-600">⚠️ No user profiles data loaded. Please check your connection and try refreshing.</p>
               )}
               
               {allOrganizations.length > 0 && allProfiles.length > 0 && subaccountOrganizations.length === 0 && (

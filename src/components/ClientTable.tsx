@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Phone, Mail, MapPin, Search, Calendar, Tag, Edit, Shield, RefreshCw, Trash2, CheckSquare, Square, Download, CalendarPlus, Bell, PhoneCall, User } from "lucide-react";
+import { Phone, Mail, MapPin, Search, Calendar, Tag, Edit, Shield, RefreshCw, Trash2, CheckSquare, Square, Download, CalendarPlus, Bell, PhoneCall, User, MessageSquare, FileText, History } from "lucide-react";
 import { useUserRole } from "@/components/UserRoleProvider";
 import { useToast } from "@/hooks/use-toast";
 import { Client } from "@/types/client";
@@ -23,11 +23,14 @@ import { EmailModal } from "./EmailModal";
 import { DialerModal } from "./DialerModal";
 import { DetailedLeadView } from "./DetailedLeadView";
 import { useTwilioStore } from "@/hooks/useTwilioStore";
+import { SmsModal } from "./SmsModal";
+import { BulkSmsModal } from "./BulkSmsModal";
+import { TagsNotesModal } from "./TagsNotesModal";
+import { AdvancedFilters, FilterState } from "./AdvancedFilters";
+import { CommunicationPanel } from "./CommunicationPanel";
 
 export const ClientTable = () => {
   const [clients, setClients] = useState<Client[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -35,14 +38,34 @@ export const ClientTable = () => {
   const [schedulingClient, setSchedulingClient] = useState<Client | null>(null);
   const [reminderClient, setReminderClient] = useState<Client | null>(null);
   const [emailingClient, setEmailingClient] = useState<Client | null>(null);
+  const [smsClient, setSmsClient] = useState<Client | null>(null);
+  const [showBulkSms, setShowBulkSms] = useState(false);
   const [showDialer, setShowDialer] = useState(false);
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
-  const { userRole, blurEnabled } = useUserRole();
+  const [tagsNotesClient, setTagsNotesClient] = useState<Client | null>(null);
+  const [communicationClient, setCommunicationClient] = useState<Client | null>(null);
+  
+  // Advanced filtering state
+  const [filters, setFilters] = useState<FilterState>({
+    searchTerm: "",
+    statusFilter: "all",
+    sourceFilter: "all",
+    selectedTags: [],
+    hasNotes: null,
+    dateRange: { from: null, to: null }
+  });
+  const { 
+    userRole, 
+    blurEnabled, 
+    isAdmin, 
+    isImpersonating, 
+    getCurrentOrganizationId,
+    getActiveProfile 
+  } = useUserRole();
   const { toast } = useToast();
   const { makeCall } = useTwilioStore();
 
-  const isAdmin = userRole === "admin";
-  const shouldBlurInfo = !isAdmin && blurEnabled;
+  const shouldBlurInfo = !isAdmin() && blurEnabled;
 
   const [preparingCall, setPreparingCall] = useState<Client | null>(null);
   const [twilioCallData, setTwilioCallData] = useState<{
@@ -66,8 +89,21 @@ export const ClientTable = () => {
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      console.log('🔍 Fetching clients for admin user...');
-      const clientList = await clientStore.getAllClients();
+      let clientList: Client[] = [];
+      
+      if (isImpersonating) {
+        // When impersonating, fetch clients for the specific organization
+        const organizationId = getCurrentOrganizationId();
+        if (organizationId) {
+          console.log('🔍 Fetching clients for impersonated organization:', organizationId);
+          clientList = await clientStore.getClientsForOrganization(organizationId);
+        }
+      } else {
+        // Normal behavior - get all clients (respects user role automatically)
+        console.log('🔍 Fetching clients for current user...');
+        clientList = await clientStore.getAllClients();
+      }
+      
       console.log('📊 Fetched clients:', clientList.length, 'clients');
       console.log('📋 Client details:', clientList);
       
@@ -230,6 +266,22 @@ export const ClientTable = () => {
     setShowDialer(true);
   };
 
+  const handleSms = (client: Client) => {
+    setSmsClient(client);
+  };
+
+  const handleBulkSms = () => {
+    if (selectedClients.length === 0) {
+      toast({
+        title: "No Clients Selected",
+        description: "Please select clients to send SMS to.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setShowBulkSms(true);
+  };
+
   const handleSelectAll = () => {
     if (selectedClients.length === filteredClients.length) {
       setSelectedClients([]);
@@ -248,13 +300,32 @@ export const ClientTable = () => {
 
   const filteredClients = clients
     .filter(client => {
-      const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+      // Ensure tags is always an array
+      const clientTags = client.tags || [];
       
-      const matchesStatus = statusFilter === "all" || client.status === statusFilter;
+      // Search term filter
+      const matchesSearch = !filters.searchTerm || 
+        client.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        (client.email && client.email.toLowerCase().includes(filters.searchTerm.toLowerCase())) ||
+        clientTags.some(tag => tag.toLowerCase().includes(filters.searchTerm.toLowerCase())) ||
+        (client.notes && client.notes.toLowerCase().includes(filters.searchTerm.toLowerCase()));
       
-      return matchesSearch && matchesStatus;
+      // Status filter
+      const matchesStatus = filters.statusFilter === "all" || client.status === filters.statusFilter;
+      
+      // Source filter
+      const matchesSource = filters.sourceFilter === "all" || client.source === filters.sourceFilter;
+      
+      // Tags filter
+      const matchesTags = filters.selectedTags.length === 0 || 
+        filters.selectedTags.every(tag => clientTags.includes(tag));
+      
+      // Notes filter
+      const matchesNotes = filters.hasNotes === null ||
+        (filters.hasNotes === true && client.notes && client.notes.trim().length > 0) ||
+        (filters.hasNotes === false && (!client.notes || client.notes.trim().length === 0));
+      
+      return matchesSearch && matchesStatus && matchesSource && matchesTags && matchesNotes;
     });
 
   const getStatusColor = (status: string) => {
@@ -345,15 +416,26 @@ export const ClientTable = () => {
               
               <div className="flex items-center space-x-2">
                 {selectedClients.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleStartDialer}
-                    className="hover:bg-green-50 hover:text-green-700"
-                  >
-                    <PhoneCall className="h-4 w-4 mr-1" />
-                    Start Dialer ({selectedClients.length})
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleStartDialer}
+                      className="hover:bg-green-50 hover:text-green-700"
+                    >
+                      <PhoneCall className="h-4 w-4 mr-1" />
+                      Start Dialer ({selectedClients.length})
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBulkSms}
+                      className="hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-1" />
+                      Bulk SMS ({selectedClients.length})
+                    </Button>
+                  </>
                 )}
 
                 <Button
@@ -390,29 +472,11 @@ export const ClientTable = () => {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search clients..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border-gray-200"
-                />
-              </div>
-              
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-md bg-white text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="lead">Lead</option>
-                <option value="potential">Potential</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+            <AdvancedFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              availableTags={[...new Set(clients.flatMap(client => (client.tags || [])))]}
+            />
           </div>
         </CardHeader>
         
@@ -510,13 +574,24 @@ export const ClientTable = () => {
                           <div className="flex items-center space-x-2">
                             <Tag className="h-3 w-3 text-gray-400" />
                             <div className="flex flex-wrap gap-1">
-                              {client.tags.map((tag, index) => (
-                                <Badge key={index} variant="secondary" className="text-xs bg-gray-100 text-gray-600">
-                                  {tag}
-                                </Badge>
-                              ))}
+                              {(client.tags && client.tags.length > 0) ? (
+                                client.tags.map((tag, index) => (
+                                  <Badge key={index} variant="secondary" className="text-xs bg-gray-100 text-gray-600">
+                                    {tag}
+                                  </Badge>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-400">No tags</span>
+                              )}
                             </div>
                           </div>
+                          
+                          {client.notes && client.notes.trim().length > 0 && (
+                            <div className="flex items-center space-x-1">
+                              <FileText className="h-3 w-3 text-blue-500" />
+                              <span className="text-xs text-blue-600 font-medium">Has notes</span>
+                            </div>
+                          )}
                           
                           <div className="flex items-center space-x-3 text-xs text-gray-500">
                             <div className="flex items-center space-x-1">
@@ -564,6 +639,36 @@ export const ClientTable = () => {
                       >
                         <Mail className="h-4 w-4 mr-1" />
                         Email
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSms(client)}
+                        className="hover:bg-orange-50 hover:text-orange-700"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        SMS
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setTagsNotesClient(client)}
+                        className="hover:bg-indigo-50 hover:text-indigo-700"
+                      >
+                        <Tag className="h-4 w-4 mr-1" />
+                        Tags
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCommunicationClient(client)}
+                        className="hover:bg-teal-50 hover:text-teal-700"
+                      >
+                        <History className="h-4 w-4 mr-1" />
+                        Comms
                       </Button>
 
                       <Button
@@ -672,6 +777,42 @@ export const ClientTable = () => {
         onOpenChange={(isOpen) => !isOpen && setViewingClient(null)}
         client={viewingClient}
       />
+
+      <SmsModal
+        isOpen={!!smsClient}
+        onClose={() => setSmsClient(null)}
+        clientName={smsClient?.name}
+        phoneNumber={smsClient?.phone}
+        clientId={smsClient?.id}
+      />
+
+      <BulkSmsModal
+        isOpen={showBulkSms}
+        onClose={() => setShowBulkSms(false)}
+        preSelectedClients={clients.filter(client => selectedClients.includes(client.id)).map(client => ({
+          id: client.id,
+          name: client.name,
+          phone: client.phone,
+          contact_name: client.name
+        }))}
+      />
+
+      <TagsNotesModal
+        isOpen={!!tagsNotesClient}
+        onClose={() => setTagsNotesClient(null)}
+        client={tagsNotesClient!}
+        onUpdate={() => {
+          fetchClients();
+          setTagsNotesClient(null);
+        }}
+      />
+
+      <CommunicationPanel
+        open={!!communicationClient}
+        onOpenChange={(isOpen) => !isOpen && setCommunicationClient(null)}
+        client={communicationClient}
+      />
     </>
   );
 };
+

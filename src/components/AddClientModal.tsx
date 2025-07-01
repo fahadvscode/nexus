@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ export const AddClientModal = ({ open, onOpenChange }: Props) => {
     address: "",
     status: "lead" as const,
     source: "",
+    notes: "",
   });
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
@@ -59,6 +61,7 @@ export const AddClientModal = ({ open, onOpenChange }: Props) => {
       const newClient = {
         ...formData,
         tags: selectedTags,
+        notes: formData.notes.trim() || null,
         user_id: session.user.id,
       };
 
@@ -82,6 +85,7 @@ export const AddClientModal = ({ open, onOpenChange }: Props) => {
         address: "",
         status: "lead",
         source: "",
+        notes: "",
       });
       setSelectedTags([]);
       setNewTag("");
@@ -207,6 +211,18 @@ export const AddClientModal = ({ open, onOpenChange }: Props) => {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              value={formData.notes}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              placeholder="Add any notes about this client..."
+              rows={3}
+              disabled={isSubmitting}
+            />
           </div>
 
           <div className="space-y-4">

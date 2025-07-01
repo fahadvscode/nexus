@@ -3,8 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, UserPlus, Calendar, TrendingUp } from "lucide-react";
 import { clientStore } from "@/store/clientStore";
 import { CallStatsCard } from "./CallStatsCard";
+import { useUserRole } from "@/components/UserRoleProvider";
+import { Client } from "@/types/client";
 
 export const DashboardStats = () => {
+  const { isImpersonating, getCurrentOrganizationId } = useUserRole();
   const [stats, setStats] = useState({
     totalClients: 0,
     activeClients: 0,
@@ -14,7 +17,19 @@ export const DashboardStats = () => {
 
   useEffect(() => {
     const fetchClients = async () => {
-      const clients = await clientStore.getAllClients();
+      let clients: Client[] = [];
+      
+      if (isImpersonating) {
+        // When impersonating, fetch clients for the specific organization
+        const organizationId = getCurrentOrganizationId();
+        if (organizationId) {
+          clients = await clientStore.getClientsForOrganization(organizationId);
+        }
+      } else {
+        // Normal behavior - get all clients (respects user role automatically)
+        clients = await clientStore.getAllClients();
+      }
+      
       if (clients) {
         const activeClients = clients.filter(client => client.status === 'active').length;
         
@@ -39,7 +54,7 @@ export const DashboardStats = () => {
     return () => {
       window.removeEventListener('clientsUpdated', handleClientsUpdate);
     };
-  }, []);
+  }, [isImpersonating, getCurrentOrganizationId]);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

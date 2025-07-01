@@ -10,7 +10,7 @@ import { X, Plus, Tag, FileText, Save } from "lucide-react";
 import { Client } from "@/types/client";
 import { clientTags } from "@/types/client";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 
 interface TagsNotesModalProps {
   isOpen: boolean;
@@ -24,6 +24,7 @@ export const TagsNotesModal = ({ isOpen, onClose, client, onUpdate }: TagsNotesM
   const [customTag, setCustomTag] = useState("");
   const [notes, setNotes] = useState(client?.notes || "");
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen && client) {
@@ -67,12 +68,19 @@ export const TagsNotesModal = ({ isOpen, onClose, client, onUpdate }: TagsNotesM
 
       if (error) throw error;
 
-      toast.success("Tags and notes updated successfully");
+      toast({
+        title: "Success",
+        description: "Tags and notes updated successfully",
+      });
       onUpdate();
       onClose();
     } catch (error) {
       console.error('Error updating client:', error);
-      toast.error("Failed to update tags and notes");
+      toast({
+        title: "Error",
+        description: "Failed to update tags and notes",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

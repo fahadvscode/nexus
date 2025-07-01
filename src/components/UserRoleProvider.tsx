@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Session } from "@supabase/supabase-js";
 import LoginPage from "@/pages/Login";
 import { useUserManagement, UserProfile, UserRole } from "@/hooks/useUserManagement";
+import { useAdminImpersonation } from "@/hooks/useAdminImpersonation";
 
 interface UserRoleContextType {
   session: Session | null;
@@ -15,6 +16,12 @@ interface UserRoleContextType {
   getCurrentOrganizationId: () => string | null;
   refreshUserData: () => void;
   forceLogout: () => void;
+  // Impersonation
+  isImpersonating: boolean;
+  impersonatedProfile: UserProfile | null;
+  switchToSubAccount: (userId: string) => Promise<boolean>;
+  exitImpersonation: () => void;
+  getActiveProfile: () => UserProfile | null;
 }
 
 const UserRoleContext = createContext<UserRoleContextType | undefined>(undefined);
@@ -36,6 +43,7 @@ export const UserRoleProvider = ({ children }: Props) => {
   const [loading, setLoading] = useState(true);
   const [blurEnabled, setBlurEnabled] = useState(false);
   const [authValidated, setAuthValidated] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
   const { 
     userProfile, 
@@ -44,6 +52,9 @@ export const UserRoleProvider = ({ children }: Props) => {
     getCurrentOrganizationId,
     refreshData 
   } = useUserManagement();
+  
+  // Initialize impersonation hook
+  const impersonation = useAdminImpersonation(userProfile, checkIsAdmin());
 
   // Force logout function
   const forceLogout = async () => {
@@ -109,10 +120,14 @@ export const UserRoleProvider = ({ children }: Props) => {
     };
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("🔄 Auth state change:", _event, session?.user?.email);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("🔄 Auth state change:", event, session?.user?.email);
       setSession(session);
-      setAuthValidated(false); // Reset validation on auth change
+      // Only reset validation on major auth events, not on token refresh
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        console.log(`🚀 Major auth event: ${event}. Resetting validation.`);
+        setAuthValidated(false);
+      }
     });
 
     return () => {
@@ -126,8 +141,11 @@ export const UserRoleProvider = ({ children }: Props) => {
       console.log("🔐 Running authentication validation...");
       const isValid = validateSessionProfile();
       setAuthValidated(isValid);
+      if (isValid && !initialLoadComplete) {
+        setInitialLoadComplete(true);
+      }
     }
-  }, [session, userProfile, authValidated]);
+  }, [session, userProfile, authValidated, initialLoadComplete]);
 
   // Set blur based on user role
   useEffect(() => {
@@ -166,9 +184,15 @@ export const UserRoleProvider = ({ children }: Props) => {
     setBlurEnabled,
     toggleBlur,
     isAdmin: isAdminCheck,
-    getCurrentOrganizationId,
+    getCurrentOrganizationId: impersonation.isImpersonating ? impersonation.getActiveOrganizationId : getCurrentOrganizationId,
     refreshUserData: refreshData,
     forceLogout,
+    // Impersonation
+    isImpersonating: impersonation.isImpersonating,
+    impersonatedProfile: impersonation.impersonatedProfile,
+    switchToSubAccount: impersonation.switchToSubAccount,
+    exitImpersonation: impersonation.exitImpersonation,
+    getActiveProfile: () => impersonation.getActiveProfile(userProfile),
   };
 
   if (loading) {
@@ -180,18 +204,20 @@ export const UserRoleProvider = ({ children }: Props) => {
     return <LoginPage />;
   }
 
-  // If user is authenticated but no profile exists yet, show loading
-  if (!userProfile) {
+  // Block rendering only on initial load. After that, render children even if profile is refreshing.
+  if (!initialLoadComplete && !userProfile) {
     return <div className="flex items-center justify-center h-screen">Setting up your account...</div>;
   }
 
-  // If authentication validation failed, force login
-  if (!authValidated) {
-    return <div className="flex items-center justify-center h-screen">Validating authentication...</div>;
+  // If auth is being re-validated after initial load, don't block rendering
+  if (!authValidated && initialLoadComplete) {
+    console.log("⏳ Re-validating session in background, not blocking UI...");
+  } else if (!authValidated) {
+    console.log("⏳ Authentication validation in progress, but not blocking UI...");
   }
 
-  // If user is inactive, show access denied
-  if (!userProfile.is_active) {
+  // If user is inactive, show access denied. Check for profile existence first.
+  if (userProfile && !userProfile.is_active) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">

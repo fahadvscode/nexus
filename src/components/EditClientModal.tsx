@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Client, clientSources } from "@/types/client";
 import { clientStore } from "@/store/clientStore";
@@ -39,6 +40,7 @@ const editClientSchema = z.object({
   address: z.string().optional(),
   status: z.enum(["active", "inactive", "lead", "potential"]),
   source: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type EditClientFormValues = z.infer<typeof editClientSchema>;
@@ -62,8 +64,9 @@ export const EditClientModal = ({ open, onOpenChange, client }: EditClientModalP
         email: client.email,
         phone: client.phone,
         address: client.address || "",
-        status: client.status,
-        source: client.source,
+        status: client.status as "active" | "inactive" | "lead" | "potential",
+        source: client.source || "",
+        notes: client.notes || "",
       });
     }
   }, [client, form, open]);
@@ -183,6 +186,19 @@ export const EditClientModal = ({ open, onOpenChange, client }: EditClientModalP
                         ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Add any notes about this client..." rows={3} {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
